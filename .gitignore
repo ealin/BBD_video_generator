@@ -1,0 +1,23 @@
+# 虛擬環境資料夾
+bin/
+include/
+lib/
+pyvenv.cfg
+.venv/
+venv/
+
+# Python 編譯快取
+__pycache__/
+*.py[cod]
+
+# 作業系統暫存檔
+.DS_Store
+
+output*
+主題圖片/
+主題影片/
+126_20260226_/
+bg_mp3/short/
+data/*.pptx
+
+

@@ -1,0 +1,23 @@
+# Import everything needed to edit video clips
+from moviepy import *
+
+# Load file example.mp4 and extract only the subclip from 00:00:10 to 00:00:20
+clip = VideoFileClip("myHolidays.mp4").with_subclip(2, 8)
+
+# Reduce the audio volume to 80% of his original volume
+clip = clip.with_multiply_volume(0.8)
+
+# Generate a text clip. You can customize the font, color, etc.
+txt_clip = TextClip( font="Annotated.ttf", text="我是大黑狗", font_size=40, color='white')
+
+# Say that you want it to appear for 10s at the center of the screen
+txt_clip = txt_clip.with_position('center').with_duration(6)
+
+# Overlay the text clip on the first video clip
+video = CompositeVideoClip([clip, txt_clip])
+
+# Write the result to a file (many options available!)
+video.write_videofile("result.mp4")
+
+
+

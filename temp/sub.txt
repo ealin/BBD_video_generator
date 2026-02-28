@@ -1,0 +1,4 @@
+AAAA\XDBBBB\XDvvvvv\XDjjjjj\XDkkkk\XDllll\XDkkkkk
+>>>>> text_clip = \XDtext_clip.\XDwith_position('center').\XDwith_duration(duration)
+>> 投資本地業務的好處是什麼？\XD穩定收入來源，\XD並可持有股份分紅。"""
+
