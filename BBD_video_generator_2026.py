@@ -636,8 +636,8 @@ def create_countdown_video(minutes, seconds, font, fontsize, color, position, ou
 # --------------------------------------------------------------------------------------------------
 
 # Configuration
-book_ID = '125'
-clip_number = 3         # 總共分為幾段 (B77-1, B77-2, B77-3)
+book_ID = '126'
+clip_number = 4         # 總共分為幾段 (B77-1, B77-2, B77-3)
 string_align = 'left'   # 'center': 靠中偏右; 'left': 對齊左邊邊框
 
 # 產生第 1 段影片

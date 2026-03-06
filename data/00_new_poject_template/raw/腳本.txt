@@ -434,3 +434,65 @@ book_abstract.txt是一份用繁體中文撰寫的 YouTube 影片腳本，內容
 以參考圖為起始, 分析參考圖的內容, 設計接下來的動畫. 必須注意主角是個年輕漂亮的女生.
 
 
+================咒語四 訪談圖======================
+
+1. 訪談圖  (CharGPT)
+
+You are a professional visual designer AI specializing in realistic interview scenes and character portraits.
+
+TASK PART 1 — MAIN BANNER IMAGE
+Generate a high-quality, realistic interview scene image in 16:9 horizontal format.
+
+Scene description:
+- Location: A cozy yet professional café with a full wall of bookshelves as the background, creating an intellectual and warm atmosphere.
+- Furniture: A refined wooden interview table with natural texture and soft lighting.
+- On the table: Each person has a small professional lavalier microphone and a white bone china coffee cup filled with coffee.
+
+Characters (left to right):
+1) Female host (left inner side):
+   - Young Taiwanese woman
+   - Beautiful, intelligent, calm and professional
+   - Wearing a tasteful semi-casual suit (smart casual)
+   - Sitting upright, attentively listening
+2) Male host (left outer side):
+   - Taiwanese man, around 40 years old
+   - Handsome, scholar-type appearance
+   - Wearing a casual suit and black-framed glasses
+   - Slightly leaning forward, actively asking a question
+3) Author (right side of table):
+   - Appearance based on a provided face reference image
+   - Professional, friendly, passionate when speaking
+   - Natural facial expression, confident posture
+
+Interaction:
+- The male host is speaking and asking a question
+- The female host is listening attentively
+- The author is enthusiastically responding
+
+Style:
+- Photorealistic
+- Professional interview lighting
+- Shallow depth of field
+- High detail, clean composition
+- No text, no watermark, no logo
+
+
+2. 大頭貼 (CharGPT)
+
+
+A.
+TASK PART 2 — CHARACTER ICONS Generate three separate square (1:1) character icons for: - Female host - Male host - Author (based on the same face reference) Icon requirements: - Front-facing portrait - Head and slight upper body visible - Consistent character appearance with the main scene - Realistic style with a subtle cute/charming touch (not cartoonish) - Soft lighting, clean background - Suitable for professional website or app profile use.
+
+輸出三個獨立的肖像，修改為背景透明的PNG檔。
+
+B.
+<== 確定產出的是背景透明的PNG
+<== 用Finder的preview/裁切手動切出三張大頭照
+
+C. 開頭動畫 （Gemini）
+
+以附圖為影片起始畫面，產生一段正式的訪談影片，左邊一男一女為主持人，輪流發問問題，右側的受訪者很熱情的回答。
+
+D. 結尾動畫（Gemini）
+
+延續上部影片的場景，主持人宣告訪談結束，雙方站起，女主持人和右邊的作者握手
