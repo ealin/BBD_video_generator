@@ -4,7 +4,6 @@ import numpy as np
 from PIL import Image
 
 # MoviePy 相關模組導入
-
 from moviepy import *
 from moviepy.video import *
 from moviepy.audio import *
@@ -92,7 +91,12 @@ def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file
     # --- 參數配置區 ---
     background_color = (0, 255, 0)  # 綠幕背景 (用於去背)
     font_ttf = 'TaipeiSansTCBeta-Regular.ttf' # 字幕字體
-    font_color = (255, 255, 153) # 香檳黃
+    
+    # [20260306 update] 1. 定義三種用於顯示字幕的顏色，格式為RGB
+    font_color_AA = (135, 206, 250) # 亮天蓝
+    font_color_BB = (255, 179, 230) # 浅珍珠红
+    font_color_CC = (255, 255, 153) # 香檳黃    ``
+    
     font_strok_color = 'black'
     font_strok_width = 2
     txt_font_size = 56
@@ -134,6 +138,9 @@ def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file
     # 初始化頭像狀態變數
     current_avatar_img = None
     current_avatar_pos = (0, 0)
+    
+    # [20260306 update] 2A. 預設的字串顏色為：font_color_AA
+    current_font_color = font_color_AA
     # ---------------------------
 
     # --- 配置結束 ---
@@ -191,16 +198,26 @@ def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file
                 resize_image2(image_filename, 'temp.jpg') 
                 continue
 
-            # --- 解析字幕以更新頭像狀態 ---
+            # --- 解析字幕以更新頭像狀態與字幕顏色 ---
+            # [20260306 update] 由於 "。。。" 包含 "。。" 及 "。"，必須從最長的開始判斷，避免誤判
             if subtitle_text.startswith("。。。"):
                 current_avatar_img = CC_IMG_PATH
                 current_avatar_pos = (CC_X, CC_Y)
+                # [20260306 update] 2D. 設定字串顏色為 font_color_CC，並將前三個字元 "。。。" 從字幕中切片移除
+                current_font_color = font_color_CC
+                subtitle_text = subtitle_text[3:]
             elif subtitle_text.startswith("。。"):
                 current_avatar_img = BB_IMG_PATH
                 current_avatar_pos = (BB_X, BB_Y)
+                # [20260306 update] 2C. 設定字串顏色為 font_color_BB，並將前兩個字元 "。。" 從字幕中切片移除
+                current_font_color = font_color_BB
+                subtitle_text = subtitle_text[2:]
             elif subtitle_text.startswith("。"):
                 current_avatar_img = AA_IMG_PATH
                 current_avatar_pos = (AA_X, AA_Y)
+                # [20260306 update] 2B. 設定字串顏色為 font_color_AA，並將前一個字元 "。" 從字幕中切片移除
+                current_font_color = font_color_AA
+                subtitle_text = subtitle_text[1:]
             elif subtitle_text.startswith("@@@@") or subtitle_text.startswith("<<<<"):
                 current_avatar_img = None
             # ---------------------------------
@@ -239,7 +256,8 @@ def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file
                 text_clip = TextClip(
                     text=subtitle_text,
                     font_size=txt_font_size,
-                    color=font_color,
+                    # [20260306 update] 將原本固定的 font_color 換成狀態紀錄的 current_font_color
+                    color=current_font_color, 
                     bg_color=background_color,
                     stroke_color=font_strok_color,
                     stroke_width=font_strok_width,
@@ -293,7 +311,7 @@ def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file
                     # 載入頭像，轉為 RGBA
                     avatar_pil = Image.open(current_avatar_img).convert("RGBA")
                     
-                    # === 新增：解析度調整邏輯 ===
+                    # === 解析度調整邏輯 ===
                     # 取得原始尺寸
                     original_w, original_h = avatar_pil.size
                     
@@ -636,8 +654,8 @@ def create_countdown_video(minutes, seconds, font, fontsize, color, position, ou
 # --------------------------------------------------------------------------------------------------
 
 # Configuration
-book_ID = '126'
-clip_number = 4         # 總共分為幾段 (B77-1, B77-2, B77-3)
+book_ID = '127'
+clip_number = 3         # 總共分為幾段 (B77-1, B77-2, B77-3)
 string_align = 'left'   # 'center': 靠中偏右; 'left': 對齊左邊邊框
 
 # 產生第 1 段影片
