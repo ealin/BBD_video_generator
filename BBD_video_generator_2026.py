@@ -80,7 +80,7 @@ def make_silence(t):
     return 0.0
 
 
-def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file, start_second, topic_index, bg_img_ID, bg_type=0):
+def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file, start_second, topic_index, bg_img_ID, bg_type):
     """
     核心功能：從指定目錄讀取 .txt 和 .mp3，生成三個同步影片：
     1. 背景影片 (_img)
@@ -158,18 +158,19 @@ def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file
     topic_text = ""
     pattern_bg_img = '_bg'
 
-    # convert bg-image-files from png to jpg
-    for i in range(0,100):   # range(0:10) <== 0~9
-        image_filename_png = os.path.join(bg_img_dir, f"{i}.png")
-        convert_png_to_jpg_with_resolution(image_filename_png,(1920, 1080))
+    # [20260306 update] 僅在 bg_type 為 0 時，才執行目錄下的圖形轉檔
+    if bg_type == 0:
+        # convert bg-image-files from png to jpg
+        for i in range(0,100):   # range(0:10) <== 0~9
+            image_filename_png = os.path.join(bg_img_dir, f"{i}.png")
+            convert_png_to_jpg_with_resolution(image_filename_png,(1920, 1080))
 
-
-    image_filename = os.path.join(bg_img_dir, f"{bg_img_ID}.jpg")
-    if not os.path.exists(image_filename):
-        image_filename = os.path.join(bg_img_dir, f"{bg_img_ID}.jpeg")
-       
-    print("Initial BG Image: " + image_filename)
-    resize_image2(image_filename, 'temp.jpg')
+        image_filename = os.path.join(bg_img_dir, f"{bg_img_ID}.jpg")
+        if not os.path.exists(image_filename):
+            image_filename = os.path.join(bg_img_dir, f"{bg_img_ID}.jpeg")
+           
+        print("Initial BG Image: " + image_filename)
+        resize_image2(image_filename, 'temp.jpg')
 
     for txt_file in all_txt_files:
         if max_line != 0:
@@ -190,12 +191,14 @@ def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file
                 subtitle_text = f.read().strip()
 
             if subtitle_text == pattern_bg_img:
-                image_filename = os.path.join(bg_img_dir, f"{bg_img_ID}.jpg")
-                if not os.path.exists(image_filename):
-                    image_filename = os.path.join(bg_img_dir, f"{bg_img_ID}.jpeg")                
-                bg_img_ID = bg_img_ID + 1
-                print("===================> 切換背景圖: " + image_filename)
-                resize_image2(image_filename, 'temp.jpg') 
+                # [20260306 update] 僅在 bg_type 為 0 時，才執行切換圖檔的動作
+                if bg_type == 0:
+                    image_filename = os.path.join(bg_img_dir, f"{bg_img_ID}.jpg")
+                    if not os.path.exists(image_filename):
+                        image_filename = os.path.join(bg_img_dir, f"{bg_img_ID}.jpeg")                
+                    bg_img_ID = bg_img_ID + 1
+                    print("===================> 切換背景圖: " + image_filename)
+                    resize_image2(image_filename, 'temp.jpg') 
                 continue
 
             # --- 解析字幕以更新頭像狀態與字幕顏色 ---
@@ -291,13 +294,15 @@ def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file
 
 
             # --- Img影片 (背景) 製作 ---
-            if starts_with_pattern(subtitle_text, '@@@@'):
-                img_video_clip = ColorClip(size=(1920, 1080), color=pending_color, duration=duration)
-            else:
-                bg_clip = ImageClip('temp.jpg').with_duration(duration)
-                img_video_clip = CompositeVideoClip([bg_clip], size=(1920, 1080)).with_duration(duration)
+            # [20260306 update] 僅在 bg_type 為 0 時，才逐段讀取 temp.jpg 或黑畫面來組成背景片段
+            if bg_type == 0:
+                if starts_with_pattern(subtitle_text, '@@@@'):
+                    img_video_clip = ColorClip(size=(1920, 1080), color=pending_color, duration=duration)
+                else:
+                    bg_clip = ImageClip('temp.jpg').with_duration(duration)
+                    img_video_clip = CompositeVideoClip([bg_clip], size=(1920, 1080)).with_duration(duration)
 
-            img_clips.append(img_video_clip)
+                img_clips.append(img_video_clip)
 
 
             # --- 頭像影片 (Head) 製作 (PIL 合成 + 縮放) ---
@@ -359,7 +364,21 @@ def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file
     final_sub_clip.write_videofile(output_file_sub, fps=24, codec='libx264', audio_codec='aac')
     print(f"已生成字幕影片: {output_file_sub}")
 
-    final_img_clip = concatenate_videoclips(img_clips, method="compose")
+    # [20260306 update] 根據 bg_type 產生最終的背景影片 output_img.mp4
+    if bg_type == 0:
+        # bg_type 為 0：組合先前產生好的靜態圖片片段
+        final_img_clip = concatenate_videoclips(img_clips, method="compose")
+    else:
+        # bg_type 為 1：視最後影片長度，反覆播放 default_bg_video
+        global default_bg_video
+        total_duration = acc_second - start_second
+        bg_video = VideoFileClip(default_bg_video).resized((1920, 1080), Image.LANCZOS)
+        # 計算需要播放多少次才能填滿總長度
+        loops = int(total_duration / bg_video.duration) + 1
+        # 將影片串接並裁剪成剛好符合字幕影片的長度，並去除音訊
+        final_img_clip = concatenate_videoclips([bg_video] * loops).with_duration(total_duration)
+        final_img_clip = final_img_clip.without_audio()
+
     final_img_clip.write_videofile(output_file_img, fps=24, codec='libx264', audio=False)
     print(f"已生成背景影片: {output_file_img}")
 
@@ -654,9 +673,18 @@ def create_countdown_video(minutes, seconds, font, fontsize, color, position, ou
 # --------------------------------------------------------------------------------------------------
 
 # Configuration
-book_ID = '127'
-clip_number = 3         # 總共分為幾段 (B77-1, B77-2, B77-3)
+book_ID = '126'
+clip_number = 4         # 總共分為幾段 (B77-1, B77-2, B77-3)
 string_align = 'left'   # 'center': 靠中偏右; 'left': 對齊左邊邊框
+
+# bg_img_type = 0 : 使用bg_image目錄下的圖檔 (例如： "bg_image/bg_126/0.jpg....")，製作背景影片
+# bg_img_type = 1 : 依據最後影片的長度，反覆播放 default_bg_video 填滿背景影片  
+BG_Type = 1
+
+default_bg_video = 'bg_image/turntable_playing.mp4'
+
+
+
 
 # 產生第 1 段影片
 topic_num1, video_length1, start_bg_img_ID = \
@@ -665,7 +693,7 @@ topic_num1, video_length1, start_bg_img_ID = \
         "./腳本/voice"+book_ID+"-1", 
         "./bg_image/bg"+book_ID,
         "./output1.mp4",
-        0, 0, 0, bg_type=0
+        0, 0, 0, bg_type=BG_Type
     )
 
 # 產生第 2 段影片
@@ -675,7 +703,7 @@ topic_num2, video_length2, start_bg_img_ID = \
             "./腳本/voice"+book_ID+"-2", 
             "./bg_image/bg"+book_ID, 
             "./output2.mp4", 
-            video_length1, topic_num1, start_bg_img_ID, bg_type=1
+            video_length1, topic_num1, start_bg_img_ID, bg_type=BG_Type
         )
 
 # 產生第 3 段影片
@@ -687,7 +715,7 @@ if clip_number >= 3:
                 "./腳本/voice"+book_ID+"-3", 
                 "./bg_image/bg"+book_ID, 
                 "./output3.mp4", 
-                video_length2, topic_num1+topic_num2, start_bg_img_ID, bg_type=1
+                video_length2, topic_num1+topic_num2, start_bg_img_ID, bg_type=BG_Type
             ) 
 
 # 產生第 4 段影片
@@ -699,7 +727,7 @@ if clip_number >= 4:
                 "./腳本/voice"+book_ID+"-4", 
                 "./bg_image/bg"+book_ID, 
                 "./output4.mp4", 
-                video_length3, topic_num1+topic_num2+topic_num3, start_bg_img_ID, bg_type=1
+                video_length3, topic_num1+topic_num2+topic_num3, start_bg_img_ID, bg_type=BG_Type
             ) 
 
 # 生成總背景音樂
