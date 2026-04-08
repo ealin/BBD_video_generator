@@ -80,26 +80,26 @@ def make_silence(t):
     return 0.0
 
 
-def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file, start_second, topic_index, bg_img_ID, bg_type=0):
+def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file, start_second, topic_index, bg_img_ID, bg_type):
     """
     核心功能：從指定目錄讀取 .txt 和 .mp3，生成三個同步影片：
     1. 背景影片 (_img)
     2. 綠幕字幕影片 (_sub)
-    3. 綠幕頭像影片 (_head) - 採用 PIL 直接合成 + 縮放功能 + 動態座標
+    3. 綠幕頭像影片 (_head) - 採用 PIL 直接合成 + 縮放功能
     """
     
     # --- 參數配置區 ---
     background_color = (0, 255, 0)  # 綠幕背景 (用於去背)
     font_ttf = 'TaipeiSansTCBeta-Regular.ttf' # 字幕字體
     
-    # 1. 定義三種用於顯示字幕的顏色，格式為RGB
+    # [20260306 update] 1. 定義三種用於顯示字幕的顏色，格式為RGB
     font_color_AA = (135, 206, 250) # 亮天蓝
     font_color_BB = (255, 179, 230) # 浅珍珠红
     font_color_CC = (255, 255, 153) # 香檳黃    ``
     
     font_strok_color = 'black'
     font_strok_width = 2
-    txt_font_size = 48     # org. 56 
+    txt_font_size = 56
     
     # Topic (標題) 字幕設定
     topic_font_color = 'white'
@@ -118,39 +118,28 @@ def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file
     pending_duration = 2
     pending_color = (0, 0, 0) # 過場黑畫面顏色
 
-    # 預先定義字幕的位置，起始高度下降 100 pixels
-    global string_align
-    if string_align == 'center':
-        base_string_left = 200
-        base_string_top = 550  # 原 450 + 100
-        base_string_text_align = 'center'
-    else:
-        base_string_left = 30
-        base_string_top = 600  # 原 500 + 100
-        base_string_text_align = 'left'
-
     # --- 頭像影片配置參數 ---
     AA_IMG_PATH = "AA.png"
     BB_IMG_PATH = "BB.png"
     CC_IMG_PATH = "CC.png"
 
-    # 設定頭像目標寬度 (Pixel)
-    head_width = 150  
-    
-    # 預先計算好的 X 座標，置於左側黑色區域
-    head_pos_x = 70
-    AA_X = head_pos_x
-    BB_X = head_pos_x*2 + head_width
-    CC_X = head_pos_x*3 + head_width*2
+    # 新增：設定頭像目標寬度 (Pixel)
+    head_width = 150  # 可自行修改為想要的數值，例如 50, 100, 300 等
+    head_height = 200
 
-    # 頭像底部和字幕頂部的間距 (pixel)
-    Avatar_Sub_offset = 20
+    # 定義頭像座標 (左上角 X, Y)
+    # 注意：這是圖片貼上的左上角座標，若縮小了圖片，位置可能需要微調
+    head_pos_x = 70
+    head_pos_y = 50     # (head_pos_x, head_pos_y) : 第一張頭像，距畫面左下角的長與寬
+    AA_X, AA_Y = head_pos_x, (1080-head_pos_y-head_height)
+    BB_X, BB_Y = head_pos_x*2 + head_width, (1080-head_pos_y-head_height)
+    CC_X, CC_Y = head_pos_x*3 + head_width*2, (1080-head_pos_y-head_height)
 
     # 初始化頭像狀態變數
     current_avatar_img = None
-    current_avatar_x = 0  # 紀錄 X 座標
+    current_avatar_pos = (0, 0)
     
-    # 2A. 預設的字串顏色為：font_color_AA
+    # [20260306 update] 2A. 預設的字串顏色為：font_color_AA
     current_font_color = font_color_AA
     # ---------------------------
 
@@ -169,6 +158,7 @@ def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file
     topic_text = ""
     pattern_bg_img = '_bg'
 
+    # [20260306 update] 僅在 bg_type 為 0 時，才執行目錄下的圖形轉檔
     if bg_type == 0:
         # convert bg-image-files from png to jpg
         for i in range(0,100):   # range(0:10) <== 0~9
@@ -201,6 +191,7 @@ def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file
                 subtitle_text = f.read().strip()
 
             if subtitle_text == pattern_bg_img:
+                # [20260306 update] 僅在 bg_type 為 0 時，才執行切換圖檔的動作
                 if bg_type == 0:
                     image_filename = os.path.join(bg_img_dir, f"{bg_img_ID}.jpg")
                     if not os.path.exists(image_filename):
@@ -211,19 +202,23 @@ def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file
                 continue
 
             # --- 解析字幕以更新頭像狀態與字幕顏色 ---
+            # [20260306 update] 由於 "。。。" 包含 "。。" 及 "。"，必須從最長的開始判斷，避免誤判
             if subtitle_text.startswith("。。。"):
                 current_avatar_img = CC_IMG_PATH
-                current_avatar_x = CC_X # 只更新 X 座標
+                current_avatar_pos = (CC_X, CC_Y)
+                # [20260306 update] 2D. 設定字串顏色為 font_color_CC，並將前三個字元 "。。。" 從字幕中切片移除
                 current_font_color = font_color_CC
                 subtitle_text = subtitle_text[3:]
             elif subtitle_text.startswith("。。"):
                 current_avatar_img = BB_IMG_PATH
-                current_avatar_x = BB_X # 只更新 X 座標
+                current_avatar_pos = (BB_X, BB_Y)
+                # [20260306 update] 2C. 設定字串顏色為 font_color_BB，並將前兩個字元 "。。" 從字幕中切片移除
                 current_font_color = font_color_BB
                 subtitle_text = subtitle_text[2:]
             elif subtitle_text.startswith("。"):
                 current_avatar_img = AA_IMG_PATH
-                current_avatar_x = AA_X # 只更新 X 座標
+                current_avatar_pos = (AA_X, AA_Y)
+                # [20260306 update] 2B. 設定字串顏色為 font_color_AA，並將前一個字元 "。" 從字幕中切片移除
                 current_font_color = font_color_AA
                 subtitle_text = subtitle_text[1:]
             elif subtitle_text.startswith("@@@@") or subtitle_text.startswith("<<<<"):
@@ -252,24 +247,28 @@ def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file
                 print("***** Topic 發現: " + subtitle_text + " 開始時間 = " + format_seconds_to_hms(acc_second))
                 topic_array.append(Topic(topic_text, acc_second, format_seconds_to_hms(acc_second)))
             else:    
-                # 採用上方預先計算好的 base_string_* 參數，此時字幕已經下降 100 pixels
-                string_left = base_string_left
-                string_top = base_string_top
-                string_text_align = base_string_text_align
+                if string_align == 'center':
+                    string_left = 200
+                    string_top = 450
+                    string_text_align = 'center'
+                else:
+                    string_left = 30
+                    string_top = 500
+                    string_text_align = 'left'
 
-                # [20260306 update] 移除 margin 參數，改用 .with_position 進行絕對定位
-                # 這樣能保證文字區塊的左上角永遠死死釘在 (string_left, string_top)，不會因為字數多寡而上下跳動
                 text_clip = TextClip(
                     text=subtitle_text,
                     font_size=txt_font_size,
+                    # [20260306 update] 將原本固定的 font_color 換成狀態紀錄的 current_font_color
                     color=current_font_color, 
                     bg_color=background_color,
                     stroke_color=font_strok_color,
                     stroke_width=font_strok_width,
+                    margin=(string_left, string_top),
                     text_align=string_text_align,
                     font=font_ttf,
                     interline=15,
-                ).with_position((string_left, string_top)).with_duration(duration)
+                ).with_position(string_text_align).with_duration(duration)
                 
                 if not starts_with_pattern(subtitle_text, pattern_no_show) and not starts_with_pattern(subtitle_text, '@@@@'):
                     sub_elements.append(text_clip)
@@ -295,6 +294,7 @@ def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file
 
 
             # --- Img影片 (背景) 製作 ---
+            # [20260306 update] 僅在 bg_type 為 0 時，才逐段讀取 temp.jpg 或黑畫面來組成背景片段
             if bg_type == 0:
                 if starts_with_pattern(subtitle_text, '@@@@'):
                     img_video_clip = ColorClip(size=(1920, 1080), color=pending_color, duration=duration)
@@ -307,30 +307,34 @@ def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file
 
             # --- 頭像影片 (Head) 製作 (PIL 合成 + 縮放) ---
             
+            # 1. 建立一張全綠色的畫布
             base_img = Image.new("RGB", (1920, 1080), background_color)
             
+            # 2. 判斷是否需要貼頭像
             if current_avatar_img is not None:
                 try:
+                    # 載入頭像，轉為 RGBA
                     avatar_pil = Image.open(current_avatar_img).convert("RGBA")
                     
+                    # === 解析度調整邏輯 ===
+                    # 取得原始尺寸
                     original_w, original_h = avatar_pil.size
                     
+                    # 計算縮放比例與新高度 (等比例縮放)
                     scale_factor = head_width / float(original_w)
                     new_height = int(float(original_h) * float(scale_factor))
                     
+                    # 執行縮放 (使用 LANCZOS 濾鏡獲得較好品質)
                     avatar_pil = avatar_pil.resize((head_width, new_height), Image.LANCZOS)
+                    # ===========================
                     
-                    # [20260306 update] 動態計算頭像 Y 座標：確保所有頭像的「左下角」對齊
-                    # 因為 base_string_top 現在是絕對固定的，所以這裡算出來的底部 Y 座標也會絕對固定
-                    # 公式：字幕第一行 Y 座標 (base_string_top) - 頭像縮放後高度 (new_height) - 10 pixels 距離
-                    avatar_y = base_string_top - new_height - Avatar_Sub_offset
-                    current_avatar_pos = (current_avatar_x, avatar_y)
-                    
+                    # 貼上圖片 (使用 Alpha 通道作為 Mask)
                     base_img.paste(avatar_pil, current_avatar_pos, avatar_pil)
                     
                 except Exception as e:
                     print(f"警告：無法載入或處理頭像圖片 {current_avatar_img}: {e}")
             
+            # 3. 轉為 MoviePy ImageClip
             final_head_frame = np.array(base_img)
             head_video_clip = ImageClip(final_head_frame).with_duration(duration)
 
@@ -360,13 +364,18 @@ def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file
     final_sub_clip.write_videofile(output_file_sub, fps=24, codec='libx264', audio_codec='aac')
     print(f"已生成字幕影片: {output_file_sub}")
 
+    # [20260306 update] 根據 bg_type 產生最終的背景影片 output_img.mp4
     if bg_type == 0:
+        # bg_type 為 0：組合先前產生好的靜態圖片片段
         final_img_clip = concatenate_videoclips(img_clips, method="compose")
     else:
+        # bg_type 為 1：視最後影片長度，反覆播放 default_bg_video
         global default_bg_video
         total_duration = acc_second - start_second
         bg_video = VideoFileClip(default_bg_video).resized((1920, 1080), Image.LANCZOS)
+        # 計算需要播放多少次才能填滿總長度
         loops = int(total_duration / bg_video.duration) + 1
+        # 將影片串接並裁剪成剛好符合字幕影片的長度，並去除音訊
         final_img_clip = concatenate_videoclips([bg_video] * loops).with_duration(total_duration)
         final_img_clip = final_img_clip.without_audio()
 
@@ -670,9 +679,11 @@ string_align = 'left'   # 'center': 靠中偏右; 'left': 對齊左邊邊框
 
 # bg_img_type = 0 : 使用bg_image目錄下的圖檔 (例如： "bg_image/bg_126/0.jpg....")，製作背景影片
 # bg_img_type = 1 : 依據最後影片的長度，反覆播放 default_bg_video 填滿背景影片  
-BG_Type = 0
+BG_Type = 1
 
 default_bg_video = 'bg_image/turntable_playing.mp4'
+
+
 
 
 # 產生第 1 段影片
@@ -721,4 +732,3 @@ if clip_number >= 4:
 
 # 生成總背景音樂
 create_audio_from_mp3s(None, "./bg_mp3", video_length4, "output" + book_ID + ".mp3")
-
