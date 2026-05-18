@@ -123,12 +123,13 @@ def make_crop_zoom_clip(img_path, duration, target_size, zoom_stops_at):
     return VideoClip(make_frame, duration=duration)
 
 
-def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file, start_second, topic_index, bg_img_ID, bg_type=0):
+def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file, start_second, topic_index, bg_img_ID, bg_type=0, mode="all"):
     """
     核心功能：從指定目錄讀取 .txt 和 .mp3，生成三個同步影片：
     1. 背景影片 (_img)
     2. 綠幕字幕影片 (_sub)
     3. 綠幕頭像影片 (_head) - 採用 PIL 直接合成 + 縮放功能 + 動態座標
+    4. "all" : 生成全部影片 (Sub, Head, Img)
     """
 
     # --- 參數配置區 ---
@@ -217,9 +218,9 @@ def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file
     text_layer_clips = []
     block_count = 0
     BLOCKS_PER_SEGMENT = 7
-    IMAGE_DISPLAY_DURATION = 30  # 改為 30 秒
+    IMAGE_DISPLAY_DURATION = 25  # 改為 30 秒
     ZOOM_STOPS_AT = 18           # 18秒內漸漸顯示完整大圖
-    TARGET_IMAGE_SIZE = 540      # 外框縮小為 3/4 (540x540)
+    TARGET_IMAGE_SIZE = 640      # 外框縮小為 3/4 (540x540)
     # -----------------------------
 
     all_txt_files = os.listdir(txt_dir)
@@ -460,29 +461,32 @@ def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file
     output_file_head = f"{base_filename}_head{ext}"
 
     # [Claude Comment] : 頭像影片不含音訊 (audio=False)，後製合成時才與字幕軌道混音
-    final_head_clip = concatenate_videoclips(head_clips, method="compose")
-    final_head_clip.write_videofile(output_file_head, fps=24, codec='libx264', audio=False)
-    print(f"已生成頭像影片: {output_file_head}")
+    if mode in ["all", "head"]:
+        final_head_clip = concatenate_videoclips(head_clips, method="compose")
+        final_head_clip.write_videofile(output_file_head, fps=24, codec='libx264', audio=False)
+        print(f"已生成頭像影片: {output_file_head}")
 
     # [Claude Comment] : 2026 更新：使用 CompositeVideoClip 組合綠幕、插圖與字幕層
-    final_sub_bg = concatenate_videoclips(sub_clips, method="compose")
-    final_sub_clip = CompositeVideoClip([final_sub_bg] + overlay_clips + text_layer_clips)
-    final_sub_clip.write_videofile(output_file_sub, fps=24, codec='libx264', audio_codec='aac')
-    print(f"已生成字幕影片: {output_file_sub}")
+    if mode in ["all", "sub"]:
+        final_sub_bg = concatenate_videoclips(sub_clips, method="compose")
+        final_sub_clip = CompositeVideoClip([final_sub_bg] + overlay_clips + text_layer_clips)
+        final_sub_clip.write_videofile(output_file_sub, fps=24, codec='libx264', audio_codec='aac')
+        print(f"已生成字幕影片: {output_file_sub}")
 
-    if bg_type == 0:
-        final_img_clip = concatenate_videoclips(img_clips, method="compose")
-    else:
-        # [Claude Comment] : bg_type=1 時，將 default_bg_video 重複循環至與內容等長，作為背景影片
-        global default_bg_video
-        total_duration = acc_second - start_second
-        bg_video = VideoFileClip(default_bg_video).resized((1920, 1080), Image.LANCZOS)
-        loops = int(total_duration / bg_video.duration) + 1
-        final_img_clip = concatenate_videoclips([bg_video] * loops).with_duration(total_duration)
-        final_img_clip = final_img_clip.without_audio()
+    if mode in ["all", "img"]:
+        if bg_type == 0:
+            final_img_clip = concatenate_videoclips(img_clips, method="compose")
+        else:
+            # [Claude Comment] : bg_type=1 時，將 default_bg_video 重複循環至與內容等長，作為背景影片
+            global default_bg_video
+            total_duration = acc_second - start_second
+            bg_video = VideoFileClip(default_bg_video).resized((1920, 1080), Image.LANCZOS)
+            loops = int(total_duration / bg_video.duration) + 1
+            final_img_clip = concatenate_videoclips([bg_video] * loops).with_duration(total_duration)
+            final_img_clip = final_img_clip.without_audio()
 
-    final_img_clip.write_videofile(output_file_img, fps=24, codec='libx264', audio=False)
-    print(f"已生成背景影片: {output_file_img}")
+        final_img_clip.write_videofile(output_file_img, fps=24, codec='libx264', audio=False)
+        print(f"已生成背景影片: {output_file_img}")
 
 
     # [Claude Comment] : 回傳章節數、目前累計秒數(+1 防止下一段 start_second 重疊)、背景圖 ID 游標
@@ -800,6 +804,13 @@ string_align = 'left'   # 'center': 靠中偏右; 'left': 對齊左邊邊框
 # bg_img_type = 1 : 依據最後影片的長度，反覆播放 default_bg_video 填滿背景影片
 BG_Type = 1
 
+# 渲染模式選擇：
+# 'all'  : 生成全部影片 (Sub, Head, Img)
+# 'sub'  : 僅生成綠幕字幕與插圖貼圖影片 (output1_sub.mp4)
+# 'head' : 僅生成綠幕頭像影片 (output1_head.mp4)
+# 'img'  : 僅生成背景影片 (output1_img.mp4)
+render_mode = 'head'
+
 # [Claude Comment] : 每段影片可指定不同的循環背景影片，目前四段皆使用同一個黑膠唱盤動畫
 default_bg_video = 'bg_image/turntable_playing.mp4'
 default_bg_video2 = 'bg_image/turntable_playing.mp4'
@@ -814,7 +825,7 @@ topic_num1, video_length1, start_bg_img_ID = \
         "./腳本/voice"+book_ID,
         "./bg_image/bg"+book_ID,
         "./output1.mp4",
-        0, 0, 0, bg_type=BG_Type
+        0, 0, 0, bg_type=BG_Type, mode=render_mode
     )
 video_length4 = video_length1
 
@@ -827,7 +838,7 @@ topic_num1, video_length1, start_bg_img_ID = \
         "./腳本/voice"+book_ID+"-1",
         "./bg_image/bg"+book_ID,
         "./output1.mp4",
-        0, 0, 0, bg_type=BG_Type
+        0, 0, 0, bg_type=BG_Type, mode=render_mode
     )
 
 # 產生第 2 段影片
@@ -839,7 +850,7 @@ topic_num2, video_length2, start_bg_img_ID = \
             "./腳本/voice"+book_ID+"-2",
             "./bg_image/bg"+book_ID,
             "./output2.mp4",
-            video_length1, topic_num1, start_bg_img_ID, bg_type=BG_Type
+            video_length1, topic_num1, start_bg_img_ID, bg_type=BG_Type, mode=render_mode
         )
 
 # 產生第 3 段影片
@@ -852,7 +863,7 @@ if clip_number >= 3:
                 "./腳本/voice"+book_ID+"-3",
                 "./bg_image/bg"+book_ID,
                 "./output3.mp4",
-                video_length2, topic_num1+topic_num2, start_bg_img_ID, bg_type=BG_Type
+                video_length2, topic_num1+topic_num2, start_bg_img_ID, bg_type=BG_Type, mode=render_mode
             )
 
 # 產生第 4 段影片
@@ -865,7 +876,7 @@ if clip_number >= 4:
                 "./腳本/voice"+book_ID+"-4",
                 "./bg_image/bg"+book_ID,
                 "./output4.mp4",
-                video_length3, topic_num1+topic_num2+topic_num3, start_bg_img_ID, bg_type=BG_Type
+                video_length3, topic_num1+topic_num2+topic_num3, start_bg_img_ID, bg_type=BG_Type, mode=render_mode
             )
 '''
 
