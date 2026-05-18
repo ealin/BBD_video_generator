@@ -1,7 +1,7 @@
 import os
 import random
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw, ImageChops
 
 # MoviePy 相關模組導入
 from moviepy import *
@@ -82,6 +82,45 @@ def make_silence(t):
     功能：產生靜音訊號（振幅為 0）。
     """
     return 0.0
+
+
+def make_crop_zoom_clip(img_path, duration, target_size, zoom_stops_at):
+    """
+    功能：產生固定外框大小的 Ken Burns 縮放影片片段
+    """
+    # 載入原始圖片並轉為 RGBA
+    pil_img = Image.open(img_path).convert("RGBA")
+    
+    # 1. 先將原始圖片裁切為正方形 (取中心部分)
+    w, h = pil_img.size
+    min_side = min(w, h)
+    left = (w - min_side) / 2
+    top = (h - min_side) / 2
+    right = (w + min_side) / 2
+    bottom = (h + min_side) / 2
+    square_img = pil_img.crop((left, top, right, bottom))
+
+    def make_frame(t):
+        # 計算當前的縮放比例 (從 1.3x 漸變到 1.0x)
+        if t <= zoom_stops_at:
+            scale = 1.3 - (1.3 - 1.0) * (t / zoom_stops_at)
+        else:
+            scale = 1.0
+            
+        # 計算當前放大後的尺寸
+        cur_size = int(target_size * scale)
+        resized_img = square_img.resize((cur_size, cur_size), Image.Resampling.LANCZOS)
+        
+        # 從放大後的圖片中，裁切出中央固定大小 (target_size x target_size) 的區域
+        c_left = (cur_size - target_size) / 2
+        c_top = (cur_size - target_size) / 2
+        c_right = c_left + target_size
+        c_bottom = c_top + target_size
+        
+        cropped_img = resized_img.crop((c_left, c_top, c_right, c_bottom))
+        return np.array(cropped_img)
+
+    return VideoClip(make_frame, duration=duration)
 
 
 def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file, start_second, topic_index, bg_img_ID, bg_type=0):
@@ -178,17 +217,9 @@ def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file
     text_layer_clips = []
     block_count = 0
     BLOCKS_PER_SEGMENT = 7
-    IMAGE_DISPLAY_DURATION = 20
-    ZOOM_STOPS_AT = 15
-    TARGET_IMAGE_SIZE = 720
-    
-    def overlay_scale_func(t):
-        start_scale = 1.2
-        end_scale = 1.0
-        if t <= ZOOM_STOPS_AT:
-            return start_scale - (start_scale - end_scale) * (t / ZOOM_STOPS_AT)
-        else:
-            return end_scale
+    IMAGE_DISPLAY_DURATION = 30  # 改為 30 秒
+    ZOOM_STOPS_AT = 18           # 18秒內漸漸顯示完整大圖
+    TARGET_IMAGE_SIZE = 540      # 外框縮小為 3/4 (540x540)
     # -----------------------------
 
     all_txt_files = os.listdir(txt_dir)
@@ -294,14 +325,11 @@ def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file
                         break
                 
                 if img_path:
-                    print(f"段落 {block_count}: 偵測到分段開頭，疊加圖片 {img_path}")
-                    ov_clip = ImageClip(img_path).with_duration(IMAGE_DISPLAY_DURATION)
-                    ov_clip = ov_clip.resized(height=TARGET_IMAGE_SIZE)
-                    ov_clip = ov_clip.resized(overlay_scale_func)
-                    ov_clip = ov_clip.with_position(lambda t: (
-                        1440 - (TARGET_IMAGE_SIZE * overlay_scale_func(t)) / 2,
-                        540 - (TARGET_IMAGE_SIZE * overlay_scale_func(t)) / 2
-                    ))
+                    print(f"段落 {block_count}: 偵測到分段開頭，疊加圖片 {img_path} (套用 Ken Burns 1.3x -> 1.0x 縮放動畫)")
+                    ov_clip = make_crop_zoom_clip(img_path, IMAGE_DISPLAY_DURATION, TARGET_IMAGE_SIZE, ZOOM_STOPS_AT)
+                    pos_x = 1440 - TARGET_IMAGE_SIZE // 2
+                    pos_y = 540 - TARGET_IMAGE_SIZE // 2
+                    ov_clip = ov_clip.with_position((pos_x, pos_y))
                     ov_clip = ov_clip.with_start(acc_second)
                     overlay_clips.append(ov_clip)
             # -----------------------------------------------
@@ -375,13 +403,27 @@ def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file
                 try:
                     avatar_pil = Image.open(current_avatar_img).convert("RGBA")
 
-                    original_w, original_h = avatar_pil.size
+                    # 裁切成正方形 (取中間部分)
+                    min_side = min(avatar_pil.size)
+                    left = (avatar_pil.width - min_side) / 2
+                    top = (avatar_pil.height - min_side) / 2
+                    right = (avatar_pil.width + min_side) / 2
+                    bottom = (avatar_pil.height + min_side) / 2
+                    avatar_pil = avatar_pil.crop((left, top, right, bottom))
 
-                    # [Claude Comment] : 等比例縮放頭像，以 head_width 為目標寬度
-                    scale_factor = head_width / float(original_w)
-                    new_height = int(float(original_h) * float(scale_factor))
-
-                    avatar_pil = avatar_pil.resize((head_width, new_height), Image.LANCZOS)
+                    # [Claude Comment] : 縮放至目標大小 (正方形)
+                    avatar_pil = avatar_pil.resize((head_width, head_width), Image.Resampling.LANCZOS)
+                    new_height = head_width
+                    
+                    # 建立圓形遮罩
+                    mask = Image.new('L', (head_width, head_width), 0)
+                    draw = ImageDraw.Draw(mask)
+                    draw.ellipse((0, 0, head_width, head_width), fill=255)
+                    
+                    # 若原圖有透明度，將原本的 alpha 通道與圓形遮罩做交集 (darker)
+                    _, _, _, alpha = avatar_pil.split()
+                    new_alpha = ImageChops.darker(alpha, mask)
+                    avatar_pil.putalpha(new_alpha)
 
                     # [20260306 update] 動態計算頭像 Y 座標：確保所有頭像的「左下角」對齊
                     # 因為 base_string_top 現在是絕對固定的，所以這裡算出來的底部 Y 座標也會絕對固定
