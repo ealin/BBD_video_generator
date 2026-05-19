@@ -3,8 +3,8 @@ import re
 import subprocess
 
 # 設定目錄
-TXT_DIR = "腳本/txt129"
-VOICE_DIR = "腳本/voice129"
+TXT_DIR = "腳本/txt130"
+VOICE_DIR = "腳本/voice130"
 os.makedirs(TXT_DIR, exist_ok=True)
 os.makedirs(VOICE_DIR, exist_ok=True)
 
@@ -41,7 +41,7 @@ def clean_text_for_tts(text):
     return text.strip()
 
 def process_segments():
-    script_path = "129_20260508_外資這樣買半導體股/raw/腳本-step4.txt"
+    script_path = "130_20260518_台灣半導體如何成為世界的心臟/raw/腳本-step4.txt"
     with open(script_path, 'r', encoding='utf-8') as f:
         content = f.read()
         
@@ -83,14 +83,14 @@ def process_segments():
         print(f"[{segment_id:04d}] 角色: {current_voice}")
         
         # 1. 產生文字檔 (保留所有控制符號)
-        txt_filename = f"B129_{segment_id:04d}.txt"
+        txt_filename = f"B130_{segment_id:04d}.txt"
         with open(os.path.join(TXT_DIR, txt_filename), 'w', encoding='utf-8') as f:
             f.write(segment)
             
         # 2. 產生語音檔
         # 準備語音
         tts_text = clean_text_for_tts(segment)
-        mp3_filename = f"B129_{segment_id:04d}.mp3"
+        mp3_filename = f"B130_{segment_id:04d}.mp3"
         mp3_path = os.path.join(VOICE_DIR, mp3_filename)
         
         # 如果是純轉場符號(空字串)，傳送一個空格給引擎以產生極短的靜音檔
@@ -103,6 +103,11 @@ def process_segments():
             "--text", final_tts_text,
             "--write-media", mp3_path
         ]
+        
+        # 女主持人加快語速至 +15%
+        if current_voice == VOICE_FEMALE_HOST:
+            cmd.extend(["--rate", "+15%"])
+            
         try:
             subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             print(f"  -> 已生成: {txt_filename} & {mp3_filename}")

@@ -217,7 +217,7 @@ def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file
     overlay_clips = []
     text_layer_clips = []
     block_count = 0
-    BLOCKS_PER_SEGMENT = 7
+    BLOCKS_PER_SEGMENT = 6
     IMAGE_DISPLAY_DURATION = 25  # 改為 30 秒
     ZOOM_STOPS_AT = 18           # 18秒內漸漸顯示完整大圖
     TARGET_IMAGE_SIZE = 640      # 外框縮小為 3/4 (540x540)
@@ -315,8 +315,19 @@ def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file
 
             # --- 2026 新增：插圖分段偵測與疊加 (僅針對字幕影片) ---
             block_count += 1
-            if (block_count - 1) % BLOCKS_PER_SEGMENT == 0:
-                seg_id = (block_count - 1) // BLOCKS_PER_SEGMENT
+            
+            # 判斷是否需要疊加圖片
+            should_overlay = False
+            seg_id = -1
+            
+            if block_count == 4:
+                should_overlay = True
+                seg_id = 0
+            elif block_count >= 8 and (block_count - 8) % BLOCKS_PER_SEGMENT == 0:
+                should_overlay = True
+                seg_id = 1 + (block_count - 8) // BLOCKS_PER_SEGMENT
+                
+            if should_overlay:
                 img_path = None
                 # 參考 bg_image/bg{ID} 目錄下的圖檔，支援多種格式
                 for ext in ['.jpeg', '.jpg', '.png']:
@@ -796,23 +807,23 @@ def create_countdown_video(minutes, seconds, font, fontsize, color, position, ou
 # --------------------------------------------------------------------------------------------------
 
 # Configuration
-book_ID = '129'
+book_ID = '130'
 clip_number = 1         # 總共分為幾段 (B77-1, B77-2, B77-3)
 string_align = 'left'   # 'center': 靠中偏右; 'left': 對齊左邊邊框
 
 # bg_img_type = 0 : 使用bg_image目錄下的圖檔 (例如： "bg_image/bg_126/0.jpg....")，製作背景影片
 # bg_img_type = 1 : 依據最後影片的長度，反覆播放 default_bg_video 填滿背景影片
-BG_Type = 1
+BG_Type = 0
 
 # 渲染模式選擇：
 # 'all'  : 生成全部影片 (Sub, Head, Img)
 # 'sub'  : 僅生成綠幕字幕與插圖貼圖影片 (output1_sub.mp4)
 # 'head' : 僅生成綠幕頭像影片 (output1_head.mp4)
 # 'img'  : 僅生成背景影片 (output1_img.mp4)
-render_mode = 'head'
+render_mode = 'all'
 
 # [Claude Comment] : 每段影片可指定不同的循環背景影片，目前四段皆使用同一個黑膠唱盤動畫
-default_bg_video = 'bg_image/turntable_playing.mp4'
+default_bg_video = '130_20260518_台灣半導體如何成為世界的心臟/AV/黑膠.mp4'
 default_bg_video2 = 'bg_image/turntable_playing.mp4'
 default_bg_video3 = 'bg_image/turntable_playing.mp4'
 default_bg_video4 = 'bg_image/turntable_playing.mp4'

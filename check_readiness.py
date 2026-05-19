@@ -8,7 +8,7 @@ def run_checks():
     
     # 1. 檢查 info.txt
     print("\n[項目 1] 檢查 info.txt...")
-    info_path = "129_20260508_外資這樣買半導體股/raw/info.txt"
+    info_path = "130_20260518_台灣半導體如何成為世界的心臟/raw/info.txt"
     if os.path.exists(info_path):
         print(f"  ✓ 找到 info.txt: {info_path}")
         with open(info_path, 'r', encoding='utf-8') as f:
@@ -29,7 +29,7 @@ def run_checks():
         
     # 2. 檢查 youtube_thumbnail.png
     print("\n[項目 2] 檢查縮圖檔案...")
-    photo_dir = "129_20260508_外資這樣買半導體股/photo"
+    photo_dir = "130_20260518_台灣半導體如何成為世界的心臟/photo"
     thumbnail_found = False
     if os.path.exists(photo_dir):
         for f in os.listdir(photo_dir):
@@ -44,8 +44,8 @@ def run_checks():
         
     # 3. 檢查腳本與語音數量一致性
     print("\n[項目 3] 檢查腳本與語音數量一致性...")
-    txt_dir = "腳本/txt129"
-    voice_dir = "腳本/voice129"
+    txt_dir = "腳本/txt130"
+    voice_dir = "腳本/voice130"
     
     txt_files = sorted([f for f in os.listdir(txt_dir) if f.endswith(".txt")]) if os.path.exists(txt_dir) else []
     voice_files = sorted([f for f in os.listdir(voice_dir) if f.endswith(".mp3")]) if os.path.exists(voice_dir) else []
@@ -81,7 +81,7 @@ def run_checks():
             print(f"  ✗ 找不到頭像: {av}")
             
     # 4.2 訪談影片
-    av_dir = "129_20260508_外資這樣買半導體股/AV"
+    av_dir = "130_20260518_台灣半導體如何成為世界的心臟/AV"
     start_v = os.path.join(av_dir, "訪談開始.mp4")
     end_v = os.path.join(av_dir, "訪談結束.mp4")
     
@@ -109,12 +109,12 @@ def run_checks():
         if not cn_cover:
             print("  ✗ 找不到中文封面圖檔")
         if not en_cover:
-            print("  ✗ 找不到原文封面圖檔")
+            print("  i 找不到原文封面圖檔 (選填，無原文版可忽略)")
             
     # 4.4 背景圖數量與分段生圖腳本 CSV 的段落數比較
-    print("\n[項目 5] 檢查 bg_image/bg129 與生圖腳本段落數...")
-    bg_dir = "bg_image/bg129"
-    csv_path = "129_20260508_外資這樣買半導體股/raw/分段生圖腳本.csv"
+    print("\n[項目 5] 檢查 bg_image/bg130 與生圖腳本段落數...")
+    bg_dir = "bg_image/bg130"
+    csv_path = "130_20260518_台灣半導體如何成為世界的心臟/raw/分段生圖腳本.csv"
     
     # 取得 CSV 分段數
     csv_segments = 0
@@ -129,7 +129,7 @@ def run_checks():
     else:
         print(f"  ✗ 找不到分段生圖腳本 CSV: {csv_path}")
         
-    # 取得 bg_image/bg129 檔案數量 (排除重複類型，計算唯一數字編號)
+    # 取得 bg_image/bg130 檔案數量 (排除重複類型，計算唯一數字編號)
     bg_numbers = set()
     if os.path.exists(bg_dir):
         for f in os.listdir(bg_dir):
@@ -138,7 +138,7 @@ def run_checks():
                 bg_numbers.add(int(name))
         
         bg_files = sorted(list(bg_numbers))
-        print(f"  - bg129 中唯一的順序編號圖檔數量: {len(bg_files)}")
+        print(f"  - bg130 中唯一的順序編號圖檔數量: {len(bg_files)}")
         if len(bg_files) > 0:
             print(f"  - 命名區間: {bg_files[0]} 至 {bg_files[-1]}")
             

@@ -3,9 +3,9 @@ from PIL import Image, ImageDraw, ImageFont, ImageEnhance
 
 def create_thumbnail():
     # 檔案路徑設定
-    bg_path = "129_20260508_外資這樣買半導體股/photo/Gemini_背景縮圖4.png"
-    book_path = "129_20260508_外資這樣買半導體股/photo/中文封面.jpeg"
-    output_path = "129_20260508_外資這樣買半導體股/photo/youtube_thumbnail.png"
+    bg_path = "130_20260518_台灣半導體如何成為世界的心臟/photo/Gemini_背景縮圖.png"
+    book_path = "130_20260518_台灣半導體如何成為世界的心臟/photo/中文封面.jpeg"
+    output_path = "130_20260518_台灣半導體如何成為世界的心臟/photo/youtube_thumbnail.png"
     font_path = "TaipeiSansTCBeta-Bold.ttf"
     
     # 尺寸與參數
@@ -87,8 +87,8 @@ def create_thumbnail():
         font_main = ImageFont.truetype(font_path, 160)
         font_sub = ImageFont.truetype(font_path, 100)
         
-    main_title = "半導體股票操作手冊"
-    sub_title = "外資主力の"
+    main_title = "餐巾紙上的國運！"
+    sub_title = "半導體霸權50年"
     
     # 文字位置參數
     left_margin = 80
