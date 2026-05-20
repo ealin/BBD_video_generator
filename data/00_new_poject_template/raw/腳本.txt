@@ -66,6 +66,45 @@ onepersonbusiness,個人品牌,副業,創業,自動化,外包,被動收入,自�
 【All AI-generated footage in this video was created using Sora 2 by OpenAI.】
 
 
+==========data preparation list======================
+
+
+
+_ 咒語1 - 生成文章 - 選定主文
+	_ 鉤子＋前言
+	_ Round1: (完整腳本，完成換行)
+     	_ book_abstract.txt - 加入其他AI好的段落
+	_ Round2: 換行符號
+	_ 最終腳本 (已加換行符號，準備進TTS系統)
+_ TTS輸出 (e.g. voice001-1, txt001-1...)
+
+_ 中文＆原文書名
+_ 中文&原文封面
+
+_ Youtube 主題
+_ 縮圖主題
+_ 縮圖背景圖檔 x 3
+_ 縮圖
+_ tag
+_ (bg_type = 0)
+
+	_ book_abstract.txt (已分段，尚未加換行符號) < == 用於切段生圖
+	_ 分段/插圖/prompt 表格 
+
+	_ bg_img x N. 
+
+_ (bg_type = 1)
+
+	_ default_bg_video (反覆播放的影片)
+
+
+_ 最終腳本 (已加換行符號，準備進TTS系統)
+_ 訪談影片
+_ 人頭
+
+
+
+
 ==========腳本======================
 
 >>>>黑狗文選|今日書摘：(英文書) 吸引力法則 

@@ -234,7 +234,8 @@ def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file
         # convert bg-image-files from png to jpg
         for i in range(0,100):   # range(0:10) <== 0~9
             image_filename_png = os.path.join(bg_img_dir, f"{i}.png")
-            convert_png_to_jpg_with_resolution(image_filename_png,(1920, 1080))
+            if os.path.exists(image_filename_png):
+                convert_png_to_jpg_with_resolution(image_filename_png,(1920, 1080))
 
         image_filename = os.path.join(bg_img_dir, f"{bg_img_ID}.jpg")
         if not os.path.exists(image_filename):
@@ -259,8 +260,12 @@ def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file
                 print(f"音訊檔案 {mp3_path} 不存在，跳過 {txt_file}")
                 continue
 
-            with open(txt_path, "r", encoding="utf-8") as f:
-                subtitle_text = f.read().strip()
+            try:
+                with open(txt_path, "r", encoding="utf-8") as f:
+                    subtitle_text = f.read().strip()
+            except UnicodeDecodeError:
+                with open(txt_path, "r", encoding="cp950", errors="ignore") as f:
+                    subtitle_text = f.read().strip()
 
             if subtitle_text == pattern_bg_img:
                 if bg_type == 0:
