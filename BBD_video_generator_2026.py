@@ -250,7 +250,7 @@ def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file
             if max_line == 0:
                 break
 
-        if txt_file.endswith(".txt"):
+        if txt_file.endswith(".txt") and not txt_file.startswith("._") and not txt_file.startswith("."):
             base_name = os.path.splitext(txt_file)[0]
             txt_path = os.path.join(txt_dir, txt_file)
             # [Claude Comment] : TTS 音訊檔與腳本 .txt 同名，僅副檔名不同
