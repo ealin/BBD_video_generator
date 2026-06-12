@@ -1,0 +1,8 @@
+Use case: ads-marketing
+Asset type: YouTube thumbnail background, square 1:1 source to be cropped into 16:9
+Primary request: Create a premium high-end watercolor business editorial background for a Chinese book summary video about personal boundaries, emotional maturity, and clear-minded living. The visual idea is "life has only two kinds of matters: what is your business and what is not your business." Show two elegant symbolic zones or rings, a calm central compass or boundary line motif, and subtle visual tension between outside noise and inner clarity.
+Scene/backdrop: Warm ivory paper texture with sophisticated watercolor washes, calm ink black, muted teal, soft gray-blue, restrained coral red, and subtle metallic gold accents.
+Subject: A small refined central symbolic motif: two concentric boundary circles, a calm compass, or two paths divided by a clean boundary line. Keep the subject compact and centered.
+Composition: Padded Safe Area is critical. The central motif must occupy only the middle 45% of the square canvas. Leave large clean watercolor negative space on all four sides, especially left and right, so the image can be cropped to 1920x1080 without cutting off any important element. No stretching, no close-up crop, no edge-to-edge objects.
+Style: Exquisite watercolor realism, high-quality commercial magazine illustration, premium editorial, subtle cinematic lighting, sharp details, cold-pressed paper texture, elegant and restrained.
+Constraints: Absolutely no visible text, no letters, no numbers, no logos, no watermark, no book cover, no human faces. Avoid clutter. Avoid dark heavy mood. Keep the central symbol complete and uncropped.

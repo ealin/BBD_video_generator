@@ -77,7 +77,7 @@ def create_video_from_images_with_ZOOMING(directory, zoom_scale, t1, t2, chn_str
 
     # 获取目录中的所有 .jpg 文件
     #image_files = [os.path.join(directory, f) for f in os.listdir(directory) if f.endswith('.png')]
-    image_files = [os.path.join(directory, f) for f in os.listdir(directory) if (f.endswith('.png') or f.endswith('.jpeg') or f.endswith('.jpg')) ]
+    image_files = [os.path.join(directory, f) for f in os.listdir(directory) if (f.endswith('.png') or f.endswith('.jpeg') or f.endswith('.jpg')) and not f.startswith('.')]
  
     if not image_files:
             print(f"目录 {directory} 中没有找到任何 .png 文件！")
@@ -200,7 +200,7 @@ def create_video_from_images_with_ZOOMING(directory, zoom_scale, t1, t2, chn_str
         
  
     # create audio clip
-    audio_files = [os.path.join(A_roll_MP3_dir, f) for f in os.listdir(A_roll_MP3_dir) if (f.endswith('.m4a') or f.endswith('.mp3')) ]
+    audio_files = [os.path.join(A_roll_MP3_dir, f) for f in os.listdir(A_roll_MP3_dir) if (f.endswith('.m4a') or f.endswith('.mp3')) and not f.startswith('.')]
     if not audio_files:
         print(f"目录 {directory} 中没有找到任何 .mp3 or m4a 文件！")
         return

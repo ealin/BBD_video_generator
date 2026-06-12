@@ -19,9 +19,34 @@ output*
 bg_mp3/short/
 data/*.pptx
 
-12*/
-126_20260226_關於恐龍你所不知道的十件事/
-127_20260310_量子之谜_当物理学遭遇意识/
-128_20260322_量子与生活/
+# 書籍資料夾 (如 130_..., 140_..., B140_...)
+[0-9][0-9][0-9]_*/
+B[0-9][0-9][0-9]_*/
+1[0-9][0-9]_*/
+
+# 影片、語音與圖片檔案
+*.mp4
+*.mp3
+*.wav
+*.png
+*.jpg
+*.jpeg
+*.webp
+temp.jpg
+
+# 排除不需要上傳的目錄
 backup/
+scratch/
+test/
+temp/
+bg_mp3/
+data/
+
+# 允許追蹤特定的設定檔與模板
+!00_new_poject_template/
+!00_new_poject_template/**/
+!00_new_poject_template/photo/*.png
+!00_new_poject_template/photo/*.jpeg
+!data/*.ttf
+!bg_mp3/*.txt
 

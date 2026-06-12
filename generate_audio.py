@@ -2,9 +2,19 @@ import os
 import re
 import subprocess
 
-# 設定目錄
-TXT_DIR = "腳本/txt130"
-VOICE_DIR = "腳本/voice130"
+# 設定 BOOK_ID 與動態目錄尋找
+BOOK_ID = "141"
+
+def find_book_dir(book_id):
+    for item in os.listdir('.'):
+        # 兼容 "139_" 或 "B139_" 開頭的目錄
+        if os.path.isdir(item) and (item.startswith(f"{book_id}_") or item.startswith(f"B{book_id}_") or item.startswith(f"1{book_id}_")):
+            return item
+    raise FileNotFoundError(f"Cannot find book directory starting with {book_id}_")
+
+book_dir = find_book_dir(BOOK_ID)
+TXT_DIR = os.path.join(book_dir, "raw", f"txt{BOOK_ID}")
+VOICE_DIR = os.path.join(book_dir, "raw", f"voice{BOOK_ID}")
 os.makedirs(TXT_DIR, exist_ok=True)
 os.makedirs(VOICE_DIR, exist_ok=True)
 
@@ -41,7 +51,7 @@ def clean_text_for_tts(text):
     return text.strip()
 
 def process_segments():
-    script_path = "130_20260518_台灣半導體如何成為世界的心臟/raw/腳本-step4.txt"
+    script_path = os.path.join(book_dir, "raw", "腳本-step4.txt")
     with open(script_path, 'r', encoding='utf-8') as f:
         content = f.read()
         
@@ -65,6 +75,8 @@ def process_segments():
                 current_part.append(line)
         if current_part:
             segments.append('\n'.join(current_part))
+
+    print(f"預期段落總數: {len(segments)}")
             
     current_voice = VOICE_MALE_HOST # 預設由男主持開場
     
@@ -82,18 +94,35 @@ def process_segments():
             
         print(f"[{segment_id:04d}] 角色: {current_voice}")
         
+        txt_filename = f"B{BOOK_ID}_{segment_id:04d}.txt"
+        txt_path = os.path.join(TXT_DIR, txt_filename)
+        mp3_filename = f"B{BOOK_ID}_{segment_id:04d}.mp3"
+        mp3_path = os.path.join(VOICE_DIR, mp3_filename)
+
+        # 智慧比對：若已有相同文字檔且音檔大小大於 0，則直接跳過生成
+        is_identical = False
+        if os.path.exists(txt_path) and os.path.exists(mp3_path) and os.path.getsize(mp3_path) > 0:
+            try:
+                with open(txt_path, 'r', encoding='utf-8') as f_old:
+                    old_content = f_old.read()
+                if old_content.strip() == segment.strip():
+                    is_identical = True
+            except Exception:
+                pass
+
+        if is_identical:
+            # 確保保留說話角色狀態
+            continue
+
         # 1. 產生文字檔 (保留所有控制符號)
-        txt_filename = f"B130_{segment_id:04d}.txt"
-        with open(os.path.join(TXT_DIR, txt_filename), 'w', encoding='utf-8') as f:
+        with open(txt_path, 'w', encoding='utf-8') as f:
             f.write(segment)
             
         # 2. 產生語音檔
         # 準備語音
         tts_text = clean_text_for_tts(segment)
-        mp3_filename = f"B130_{segment_id:04d}.mp3"
-        mp3_path = os.path.join(VOICE_DIR, mp3_filename)
         
-        # 如果是純轉場符號(空字串)，傳送一個空格給引擎以產生極短的靜音檔
+        # 如果是純轉場符號(空字串)，傳送一個空格給引擎以產生極短 of 靜音檔
         final_tts_text = tts_text if tts_text else " "
         
         # 使用 python3 -m edge_tts 呼叫引擎
@@ -108,11 +137,42 @@ def process_segments():
         if current_voice == VOICE_FEMALE_HOST:
             cmd.extend(["--rate", "+15%"])
             
-        try:
-            subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            print(f"  -> 已生成: {txt_filename} & {mp3_filename}")
-        except subprocess.CalledProcessError as e:
-            print(f"  -> 生成 {mp3_filename} 失敗: {e}")
+        success = False
+        for attempt in range(1, 4):
+            try:
+                subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                print(f"  -> 已生成: {txt_filename} & {mp3_filename}")
+                success = True
+                break
+            except subprocess.CalledProcessError as e:
+                import time
+                print(f"  -> 生成 {mp3_filename} 失敗 (第 {attempt} 次嘗試): {e}")
+                if attempt < 3:
+                    time.sleep(2)
+        if not success:
+            print(f"  -> ❌ 生成 {mp3_filename} 最終失敗！")
+
+    # 完整性驗證：避免中途停止時誤以為 txt/mp3 數量相等就是完成
+    missing_txt = []
+    missing_mp3 = []
+    zero_mp3 = []
+    for idx in range(1, len(segments) + 1):
+        base = f"B{BOOK_ID}_{idx:04d}"
+        txt_path = os.path.join(TXT_DIR, base + ".txt")
+        mp3_path = os.path.join(VOICE_DIR, base + ".mp3")
+        if not os.path.exists(txt_path):
+            missing_txt.append(base + ".txt")
+        if not os.path.exists(mp3_path):
+            missing_mp3.append(base + ".mp3")
+        elif os.path.getsize(mp3_path) == 0:
+            zero_mp3.append(base + ".mp3")
+    print(f"\n完整性驗證: expected={len(segments)}, missing_txt={len(missing_txt)}, missing_mp3={len(missing_mp3)}, zero_mp3={len(zero_mp3)}")
+    if missing_txt:
+        print("缺少文字檔:", missing_txt[:20])
+    if missing_mp3:
+        print("缺少語音檔:", missing_mp3[:20])
+    if zero_mp3:
+        print("0-byte 語音檔:", zero_mp3[:20])
 
 if __name__ == "__main__":
     process_segments()

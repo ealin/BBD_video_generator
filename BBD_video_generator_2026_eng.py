@@ -788,7 +788,7 @@ def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file
 
     # [Claude Comment] : 頭像影片不含音訊 (audio=False)，後製合成時才與字幕軌道混音
     if mode in ["all", "head"]:
-        final_head_clip = concatenate_videoclips(head_clips, method="chain")
+        final_head_clip = concatenate_videoclips(head_clips, method="compose")
         logger_head = TimeTrackingLogger(os.path.basename(output_file_head))
         final_head_clip.write_videofile(output_file_head, fps=24, codec='libx264', audio=False, threads=8, logger=logger_head)
         elapsed = int(time.time() - logger_head.start_time)
@@ -796,7 +796,7 @@ def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file
 
     # [Claude Comment] : 2026 更新：使用 CompositeVideoClip 組合綠幕、插圖與字幕層
     if mode in ["all", "sub"]:
-        final_sub_bg = concatenate_videoclips(sub_clips, method="chain")
+        final_sub_bg = concatenate_videoclips(sub_clips, method="compose")
         final_sub_clip = CompositeVideoClip([final_sub_bg] + overlay_clips + text_layer_clips)
         logger_sub = TimeTrackingLogger(os.path.basename(output_file_sub))
         final_sub_clip.write_videofile(output_file_sub, fps=24, codec='libx264', audio_codec='aac', threads=8, logger=logger_sub)
@@ -805,7 +805,7 @@ def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file
 
     if mode in ["all", "img"]:
         if bg_type == 0:
-            final_img_clip = concatenate_videoclips(img_clips, method="chain")
+            final_img_clip = concatenate_videoclips(img_clips, method="compose")
         else:
             # [Claude Comment] : bg_type=1 時，將 default_bg_video 重複循環至與內容等長，作為背景影片
             global default_bg_video
@@ -1130,7 +1130,7 @@ def create_countdown_video(minutes, seconds, font, fontsize, color, position, ou
 # --------------------------------------------------------------------------------------------------
 
 # Configuration
-book_ID = '141'
+book_ID = '138'
 clip_number = 1         # 總共分為幾段 (B77-1, B77-2, B77-3)
 string_align = 'left'   # 'center': 靠中偏右; 'left': 對齊左邊邊框
 
@@ -1146,7 +1146,7 @@ BG_Type = 1
 render_mode = 'all'
 
 # [Claude Comment] : 每段影片可指定不同的循環背景影片，目前四段皆使用同一個黑膠唱盤動畫
-default_bg_video = 'data/森林流水.mp4'
+default_bg_video = 'data/銀河.mp4'
 default_bg_video2 = 'data/黑膠2.mp4'
 default_bg_video3 = 'data/黑膠2.mp4'
 default_bg_video4 = 'data/黑膠2.mp4'
@@ -1155,34 +1155,26 @@ import sys
 is_eng = "--eng" in sys.argv
 
 if is_eng:
-    if book_ID == '135':
-        txt_dir = "./135_20260528_量子狗屎/raw/txt135_E"
-        voice_dir = "./135_20260528_量子狗屎/raw/voice135_E"
-        bg_img_dir = "./135_20260528_量子狗屎/photo/bg135"
-        output_video = "./135_20260528_量子狗屎/output/output135_E.mp4"
-        output_audio = "./135_20260528_量子狗屎/output/output135_E.mp3"
-        os.makedirs("./135_20260528_量子狗屎/output", exist_ok=True)
+    if book_ID == '136':
+        txt_dir = "./136_20260528_人生只有兩件事/raw/txt136_E"
+        voice_dir = "./136_20260528_人生只有兩件事/raw/voice136_E"
+        bg_img_dir = "./136_20260528_人生只有兩件事/photo/bg136"
+        output_video = "./136_20260528_人生只有兩件事/AV/output136_E.mp4"
+        output_audio = "./136_20260528_人生只有兩件事/AV/output136_E.mp3"
+        os.makedirs("./136_20260528_人生只有兩件事/AV", exist_ok=True)
     else:
-        book_ID = '134'
-        txt_dir = "./134_20260527_你的生命是一場喜樂的量子遊戲/raw/txt134_E"
-        voice_dir = "./134_20260527_你的生命是一場喜樂的量子遊戲/raw/voice134_E"
-        bg_img_dir = "./134_20260527_你的生命是一場喜樂的量子遊戲/photo/bg134"
-        output_video = "./134_20260527_你的生命是一場喜樂的量子遊戲/AV/output134_E.mp4"
-        output_audio = "./134_20260527_你的生命是一場喜樂的量子遊戲/AV/output134_E.mp3"
+        book_ID = '136'
+        txt_dir = "./136_20260528_人生只有兩件事/raw/txt136_E"
+        voice_dir = "./136_20260528_人生只有兩件事/raw/voice136_E"
+        bg_img_dir = "./136_20260528_人生只有兩件事/photo/bg136"
+        output_video = "./136_20260528_人生只有兩件事/AV/output136_E.mp4"
+        output_audio = "./136_20260528_人生只有兩件事/AV/output136_E.mp3"
 else:
-    def find_book_dir(book_id):
-        for item in os.listdir('.'):
-            if os.path.isdir(item) and (item.startswith(f"{book_id}_") or item.startswith(f"B{book_id}_") or item.startswith(f"1{book_id}_")):
-                return item
-        raise FileNotFoundError(f"Cannot find book directory starting with {book_id}_")
-    
-    book_dir = find_book_dir(book_ID)
-    txt_dir = f"./{book_dir}/raw/txt{book_ID}"
-    voice_dir = f"./{book_dir}/raw/voice{book_ID}"
-    bg_img_dir = f"./{book_dir}/photo/bg{book_ID}"
-    os.makedirs(f"./{book_dir}/output", exist_ok=True)
-    output_video = f"./{book_dir}/output/output1.mp4"
-    output_audio = f"./{book_dir}/output/output{book_ID}.mp3"
+    txt_dir = "./腳本/txt" + book_ID
+    voice_dir = "./腳本/voice" + book_ID
+    bg_img_dir = "./bg_image/bg" + book_ID
+    output_video = "./output1.mp4"
+    output_audio = "output" + book_ID + ".mp3"
 
 # 產生第 1 段影片
 # [Claude Comment] : start_second=0 表示第 1 段從 0 秒開始；topic_index=0、bg_img_ID=0 皆從頭計數

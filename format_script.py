@@ -55,7 +55,7 @@ def split_phrase_by_atoms(phrase, max_chars=24):
         lines.append("".join(current_line_atoms))
     return lines
 
-def process_speaker_text(text, speaker_prefix, max_chars=24):
+def process_speaker_text(text, speaker_prefix, max_chars=24, max_segment_lines=2):
     safe_prefix = speaker_prefix.replace('。', '★')
     text = safe_prefix + text
     
@@ -69,6 +69,8 @@ def process_speaker_text(text, speaker_prefix, max_chars=24):
     
     segments = []
     current_segment = []
+
+    # max_segment_lines 由外部傳入，此處不再寫死1
     
     for ms in major_sentences:
         sub_parts = re.split(r'([，！？：][」”』]?)', ms)
@@ -81,11 +83,11 @@ def process_speaker_text(text, speaker_prefix, max_chars=24):
         
         for sp in sub_phrases:
             phrase_lines = split_phrase_by_atoms(sp, max_chars)
-            if current_segment and len(current_segment) + len(phrase_lines) > 5:
+            if current_segment and len(current_segment) + len(phrase_lines) > max_segment_lines:
                 segments.append(current_segment)
                 current_segment = []
             for line in phrase_lines:
-                if len(current_segment) >= 5:
+                if len(current_segment) >= max_segment_lines:
                     segments.append(current_segment)
                     current_segment = []
                 current_segment.append(line)
@@ -95,7 +97,7 @@ def process_speaker_text(text, speaker_prefix, max_chars=24):
             
     return ["<".join([line.replace('★', '。') for line in seg]) for seg in segments]
 
-def process_script(input_path, output_path):
+def process_script(input_path, output_path, max_chars=24, max_segment_lines=2):
     with open(input_path, 'r', encoding='utf-8') as f:
         content = f.read()
     lines = content.split('\n')
@@ -129,6 +131,28 @@ def process_script(input_path, output_path):
             current_speaker_prefix = "。。。"
             i += 1
             continue
+        direct_speaker_match = re.match(r'^(。。。|。。|。)(.+)$', line)
+        if direct_speaker_match:
+            speaker_prefix = direct_speaker_match.group(1)
+            direct_lines = [direct_speaker_match.group(2)]
+            i += 1
+            while i < len(lines):
+                next_line = lines[i].strip()
+                if not next_line:
+                    i += 1
+                    continue
+                if next_line in ["男主持：", "女主持：", "受訪者："] or re.match(r'第\d+章：', next_line):
+                    break
+                next_direct_match = re.match(r'^(。。。|。。|。)(.+)$', next_line)
+                if next_direct_match:
+                    break
+                direct_lines.append(next_line)
+                i += 1
+            full_text = "".join(direct_lines)
+            segments = process_speaker_text(full_text, speaker_prefix, max_chars=max_chars, max_segment_lines=max_segment_lines)
+            if segments:
+                output.append("\n\n".join(segments) + "\n\n")
+            continue
         text_block = []
         while i < len(lines):
             next_line = lines[i].strip()
@@ -140,13 +164,28 @@ def process_script(input_path, output_path):
             text_block.append(next_line)
             i += 1
         full_text = "".join(text_block)
-        segments = process_speaker_text(full_text, current_speaker_prefix, max_chars=24)
+        segments = process_speaker_text(full_text, current_speaker_prefix, max_chars=max_chars, max_segment_lines=max_segment_lines)
         if segments:
             output.append("\n\n".join(segments) + "\n\n")
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write("".join(output).strip() + "\n")
 
+def find_book_dir(book_id):
+    for item in os.listdir('.'):
+        if os.path.isdir(item) and (item.startswith(f"{book_id}_") or item.startswith(f"B{book_id}_") or item.startswith(f"1{book_id}_")):
+            return item
+    raise FileNotFoundError(f"Cannot find book directory starting with {book_id}_")
+
 if __name__ == "__main__":
-    base_dir = "129_20260508_外資這樣買半導體股/raw"
-    process_script(os.path.join(base_dir, "腳本-step2.txt"), os.path.join(base_dir, "腳本-step4.txt"))
-    print("Done! Latest script version restored.")
+    BOOK_ID = "141"
+    book_dir = find_book_dir(BOOK_ID)
+    base_dir = os.path.join(book_dir, "raw")
+    max_chars          = 30   # 每行最多幾個字元
+    max_segment_lines  = 2    # 每個畫面最多幾行
+    process_script(
+        os.path.join(base_dir, "腳本-step2.txt"),
+        os.path.join(base_dir, "腳本-step3.txt"),
+        max_chars=max_chars,
+        max_segment_lines=max_segment_lines
+    )
+    print(f"Done! max_chars={max_chars}, max_segment_lines={max_segment_lines}")
