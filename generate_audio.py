@@ -3,12 +3,12 @@ import re
 import subprocess
 
 # 設定 BOOK_ID 與動態目錄尋找
-BOOK_ID = "141"
+BOOK_ID = "144"
 
 def find_book_dir(book_id):
     for item in os.listdir('.'):
         # 兼容 "139_" 或 "B139_" 開頭的目錄
-        if os.path.isdir(item) and (item.startswith(f"{book_id}_") or item.startswith(f"B{book_id}_") or item.startswith(f"1{book_id}_")):
+        if os.path.isdir(item) and (item.startswith(f"{book_id}_") or item.startswith(f"B{book_id}_") or item.startswith(f"1{book_id}_") or item.startswith(f"{book_id}-") or item.startswith(f"B{book_id}-") or item.startswith(f"1{book_id}-")):
             return item
     raise FileNotFoundError(f"Cannot find book directory starting with {book_id}_")
 

@@ -144,7 +144,7 @@ AI 讀取 `raw/book.txt`，萃取核心觀點並產出 `raw/腳本.txt`。
 - `--output-dir PATH`
 
 引擎分配規則：
-- 使用者可指定偶數 prompt 用 ChatGPT，奇數 prompt 用 Gemini。
+- 偶數編號的圖要用 ChatGPT 產生，奇數編號的圖用 Gemini 產生，可以平行工作。
 - 若中途某引擎不可用，可從指定編號開始改用另一個引擎，例如 `--engine gemini --even --start 34`。
 - 已存在的圖檔應跳過，不覆蓋。
 

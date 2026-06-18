@@ -1130,7 +1130,7 @@ def create_countdown_video(minutes, seconds, font, fontsize, color, position, ou
 # --------------------------------------------------------------------------------------------------
 
 # Configuration
-book_ID = '141'
+book_ID = '144'
 clip_number = 1         # 總共分為幾段 (B77-1, B77-2, B77-3)
 string_align = 'left'   # 'center': 靠中偏右; 'left': 對齊左邊邊框
 
@@ -1143,10 +1143,10 @@ BG_Type = 1
 # 'sub'  : 僅生成綠幕字幕與插圖貼圖影片 (output1_sub.mp4)
 # 'head' : 僅生成綠幕頭像影片 (output1_head.mp4)
 # 'img'  : 僅生成背景影片 (output1_img.mp4)
-render_mode = 'all'
+render_mode = 'img'
 
 # [Claude Comment] : 每段影片可指定不同的循環背景影片，目前四段皆使用同一個黑膠唱盤動畫
-default_bg_video = 'data/森林流水.mp4'
+default_bg_video = 'data/背景影片/coding.mp4'
 default_bg_video2 = 'data/黑膠2.mp4'
 default_bg_video3 = 'data/黑膠2.mp4'
 default_bg_video4 = 'data/黑膠2.mp4'
@@ -1172,7 +1172,7 @@ if is_eng:
 else:
     def find_book_dir(book_id):
         for item in os.listdir('.'):
-            if os.path.isdir(item) and (item.startswith(f"{book_id}_") or item.startswith(f"B{book_id}_") or item.startswith(f"1{book_id}_")):
+            if os.path.isdir(item) and (item.startswith(f"{book_id}_") or item.startswith(f"B{book_id}_") or item.startswith(f"1{book_id}_") or item.startswith(f"{book_id}-") or item.startswith(f"B{book_id}-") or item.startswith(f"1{book_id}-")):
                 return item
         raise FileNotFoundError(f"Cannot find book directory starting with {book_id}_")
     

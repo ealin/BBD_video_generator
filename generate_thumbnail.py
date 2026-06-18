@@ -3,13 +3,13 @@ from PIL import Image, ImageDraw, ImageFont, ImageEnhance
 
 def find_book_dir(book_id):
     for item in os.listdir('.'):
-        if os.path.isdir(item) and (item.startswith(f"{book_id}_") or item.startswith(f"B{book_id}_") or item.startswith(f"1{book_id}_")):
+        if os.path.isdir(item) and (item.startswith(f"{book_id}_") or item.startswith(f"B{book_id}_") or item.startswith(f"1{book_id}_") or item.startswith(f"{book_id}-") or item.startswith(f"B{book_id}-") or item.startswith(f"1{book_id}-")):
             return item
     raise FileNotFoundError(f"Cannot find book directory starting with {book_id}_")
 
 def create_thumbnail():
     # 檔案路徑設定
-    book_id = "141"
+    book_id = "144"
     book_dir = find_book_dir(book_id)
     info_path = os.path.join(book_dir, "raw", "info.txt")
     bg_path = os.path.join(book_dir, "photo", "縮圖背景.png")
@@ -117,8 +117,8 @@ def create_thumbnail():
     
     temp_draw = ImageDraw.Draw(canvas)
     if os.path.exists(font_path):
-        main_size = 200
-        while main_size > 118:
+        main_size = 205
+        while main_size > 123:
             font_main = ImageFont.truetype(font_path, main_size)
             bbox = temp_draw.textbbox((0, 0), main_title, font=font_main, stroke_width=12)
             if bbox[2] - bbox[0] <= max_text_width:
@@ -142,25 +142,25 @@ def create_thumbnail():
     main_y = THUMB_HEIGHT - bottom_margin - main_h - 40
     sub_y = main_y - sub_h - 30
     
-    # 2. 處理書籍封面 (無旋轉、80%不透明度、置於右下、下方與標題對齊)
+    # 2. 處理書籍封面 (置於左上角，對齊左邊距 80)
     print("載入並處理書籍封面...")
     if os.path.exists(book_path):
         book_img = Image.open(book_path).convert("RGBA")
         
-        # 調整封面大小，高度佔 58%，避免壓到較長的縮圖標題
-        target_book_height = int(THUMB_HEIGHT * 0.58)
+        # 調整封面大小，高度佔 35% 再加 70 像素 (長邊放大 10 點)
+        target_book_height = int(THUMB_HEIGHT * 0.35) + 70
         book_ratio = book_img.width / book_img.height
         target_book_width = int(target_book_height * book_ratio)
         book_img = book_img.resize((target_book_width, target_book_height), Image.Resampling.LANCZOS)
         
-        # 套用 80% 不透明度
+        # 保持 100% 不透明度
         alpha = book_img.split()[3]
-        alpha = ImageEnhance.Brightness(alpha).enhance(0.80)
+        alpha = ImageEnhance.Brightness(alpha).enhance(1.0)
         book_img.putalpha(alpha)
         
-        # 放置於靠近右下角，下方與主標題文字下方對齊
-        book_x = THUMB_WIDTH - book_img.width - 80 # 靠右下偏 80px 邊距
-        book_y = (main_y + main_bbox[3]) - book_img.height
+        # 放置於右下角，X對齊右邊距 80，底部與主標題（標題第二行）對齊
+        book_x = THUMB_WIDTH - 80 - target_book_width
+        book_y = main_y + main_bbox[3] - target_book_height
         
         print(f"書封位置：x={book_x}, y={book_y}")
         canvas.paste(book_img, (book_x, book_y), book_img)

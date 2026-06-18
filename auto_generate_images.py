@@ -28,11 +28,11 @@ import requests
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
 
 # ============ 設定區 ============
-BOOK_ID = "141"
+BOOK_ID = "144"
 
 def find_book_dir(book_id):
     for item in os.listdir('.'):
-        if os.path.isdir(item) and (item.startswith(f"{book_id}_") or item.startswith(f"B{book_id}_") or item.startswith(f"1{book_id}_")):
+        if os.path.isdir(item) and (item.startswith(f"{book_id}_") or item.startswith(f"B{book_id}_") or item.startswith(f"1{book_id}_") or item.startswith(f"{book_id}-") or item.startswith(f"B{book_id}-") or item.startswith(f"1{book_id}-")):
             return item
     raise FileNotFoundError(f"Cannot find book directory starting with {book_id}_")
 
@@ -73,15 +73,16 @@ def read_prompts(csv_path: str) -> list[dict]:
     return prompts
 
 
-def setup_browser(pw):
+def setup_browser(pw, engine="chatgpt"):
     """啟動瀏覽器，使用持久化 profile 以保留登入狀態。"""
-    # 首次啟動時，從 Chrome 複製 cookies（如果 profile 目錄不存在）
-    if not os.path.exists(PW_PROFILE_DIR):
-        print("ℹ️  首次啟動：建立 Playwright profile 目錄...")
-        os.makedirs(PW_PROFILE_DIR, exist_ok=True)
+    profile_dir = os.path.expanduser(f"~/.playwright_{engine}_profile")
+    # 首次啟動時，建立 profile 目錄
+    if not os.path.exists(profile_dir):
+        print(f"ℹ️  首次啟動：建立 Playwright {engine} profile 目錄...")
+        os.makedirs(profile_dir, exist_ok=True)
     
     context = pw.chromium.launch_persistent_context(
-        user_data_dir=PW_PROFILE_DIR,
+        user_data_dir=profile_dir,
         headless=False,          # 有頭模式，方便觀察與手動介入
         channel="chromium",
         viewport={"width": 1440, "height": 900},
@@ -328,17 +329,16 @@ def send_prompt_and_download(page, prompt: str, seg_id: int, output_dir: str, en
             except Exception:
                 continue
         
-        if engine == "gemini":
-            print(f"  👉 GEMINI 使用 Enter 送出...")
-            input_box.focus()
-            page.keyboard.press("Enter")
-        elif send_btn:
+        if send_btn:
             print(f"  👉 點擊送出按鈕...")
             send_btn.click()
         else:
-            print(f"  👉 未找到送出按鈕，嘗試按 Enter 送出...")
+            print(f"  👉 未找到送出按鈕，嘗試送出...")
             input_box.focus()
-            page.keyboard.press("Enter")
+            if engine == "gemini":
+                page.keyboard.press("Control+Enter")
+            else:
+                page.keyboard.press("Enter")
         
         print(f"  📤 seg {seg_id:02d}: Prompt 已送出，等待生圖...")
         
@@ -717,7 +717,7 @@ def main():
     # 啟動瀏覽器
     print("\n🚀 啟動瀏覽器...")
     with sync_playwright() as pw:
-        context = setup_browser(pw)
+        context = setup_browser(pw, args.engine)
         page = context.pages[0] if context.pages else context.new_page()
         
         # 導航到目標網站

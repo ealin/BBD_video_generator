@@ -3,13 +3,13 @@ import csv
 
 def find_book_dir(book_id):
     for item in os.listdir('.'):
-        if os.path.isdir(item) and (item.startswith(f"{book_id}_") or item.startswith(f"B{book_id}_") or item.startswith(f"1{book_id}_")):
+        if os.path.isdir(item) and (item.startswith(f"{book_id}_") or item.startswith(f"B{book_id}_") or item.startswith(f"1{book_id}_") or item.startswith(f"{book_id}-") or item.startswith(f"B{book_id}-") or item.startswith(f"1{book_id}-")):
             return item
     raise FileNotFoundError(f"Cannot find book directory starting with {book_id}_")
 
 def generate_csv():
     # 檔案路徑與設定
-    book_id = "141"
+    book_id = "144"
     book_dir = find_book_dir(book_id)
     txt_dir = os.path.join(book_dir, "raw", f"txt{book_id}")
     csv_path = os.path.join(book_dir, "raw", "分段生圖腳本.csv")
@@ -51,48 +51,168 @@ def generate_csv():
                 seg_id = total_segments - 1
         seg_blocks[seg_id].append(block_text)
         
-    # 3. 基礎生圖設計風格 (B141 萬曆朝鮮戰爭全史：歷史水彩戰爭敘事插畫)
+    # 3. 基礎生圖設計風格 (B144: 現代商務水彩風格 - AI 協作與產品經理主題)
     base_prompt = (
-        "Aspect ratio 1:1, square format, exactly 1024x1024 resolution. Create a premium historical editorial watercolor illustration "
-        "for a Chinese-language history book summary video about the Imjin War, also known as the Wanli Korean War. The visual style must combine "
-        "East Asian historical atmosphere, cinematic war-documentary composition, and refined commercial magazine illustration quality. Use richly visible "
-        "cold-pressed paper texture, expressive ink linework, layered watercolor washes, mist, smoke, firelight, sea wind, old maps, armor silhouettes, banners, "
-        "fortress walls, warships, diplomatic halls, and battlefield landscapes. The mood should be serious, epic, tragic, scholarly, and historically immersive, "
-        "not cartoonish and not fantasy. Avoid modern objects, modern uniforms, modern weapons, anachronistic buildings, and exaggerated anime aesthetics. "
-        "Absolutely no text, no words, no alphabet letters, no Chinese characters, no Korean Hangul, no Japanese kana, no numbers, no logos, and no watermark visible anywhere. "
-        "The image must communicate only through symbolic historical visuals. Use a sophisticated palette of aged parchment ivory, ink black, muted Ming blue, "
-        "deep ocean teal, smoky grey, burnt umber, blood-red banners, and restrained gold accents. Every scene should feel like a carefully researched historical "
-        "painting with cinematic lighting, dramatic depth, balanced composition, and strong storytelling clarity. "
+        "Aspect ratio 1:1, square format, exactly 1024x1024 resolution. Create a premium modern business editorial watercolor illustration "
+        "for a professional book summary video about product management and AI agents. The visual style must combine "
+        "sophisticated software design concepts, digital collaboration, and poetic storytelling. Use richly visible cold-pressed paper texture, "
+        "expressive charcoal linework, layered translucent watercolor washes, and subtle light rays. The mood should be thoughtful, "
+        "inspiring, and premium, not cartoonish and not sci-fi fantasy. Use a sophisticated, harmonious color palette of deep indigo blue, "
+        "warm sand ivory, soft olive green, muted charcoal grey, and restrained gold accents. "
+        "Absolutely no text, no words, no alphabet letters, no numbers, no logos, and no watermark visible anywhere. "
+        "The image must communicate only through symbolic, clean visual concepts. "
     )
 
-    # 精巧的視覺設計概念庫 (Book 141 萬曆朝鮮戰爭全史)
+    # 35組針對每個分段精心設計的「故事性/隱喻性」視覺概念
     concepts = [
-        ("開場：十六世紀東亞秩序的裂縫", "An old East Asian map spread across a wooden table, with three shadowed realms implied by different colored ink washes; storm clouds gather over the Korean peninsula, a compass and war drums nearby, representing the looming regional crisis."),
-        ("作者分身與歷史訪談", "A quiet scholar silhouette in a Ming-style study, surrounded by open historical scrolls, ink brushes, and translucent battlefield visions rising from the pages, representing an authorial historical guide entering an interview."),
-        ("豐臣秀吉統一日本後的野心", "A powerful warlord silhouette standing before a newly unified island realm, samurai banners and ships gathering behind him, distant mainland mountains fading across the sea, representing expansionist ambition after civil war."),
-        ("對馬島的欺瞞外交", "A small misty island between two larger lands, with a fragile messenger boat crossing turbulent water and two sealed letters casting conflicting shadows, representing ambiguous diplomacy and mistranslation."),
-        ("日軍渡海與釜山危機", "A fleet of wooden warships approaching a Korean coast under a red dawn, soldiers landing near burning watchtowers and frightened civilians fleeing in the distance, representing the sudden invasion."),
-        ("東萊與彈琴臺的崩潰", "A besieged Korean fortress gate under smoke and arrows, exhausted defenders on the walls, while cavalry and musket smoke clash in a muddy field beyond, representing early battlefield collapse."),
-        ("漢城、開城、平壤相繼陷落", "An empty royal road leading north through abandoned gates, scattered banners, refugees, and distant flames under a cold sky, representing the fall of the three capitals."),
-        ("李舜臣與海上補給線", "Korean panokseon warships cutting through dark blue waves, cannon smoke and disciplined formations striking enemy supply ships, representing naval resistance and disrupted logistics."),
-        ("明朝是否出兵的戰略抉擇", "A Ming court war council in a dim palace hall, generals and officials around a large border map, candlelight illuminating the Liaodong frontier and Korean peninsula, representing strategic deliberation."),
-        ("沈惟敬與小西行長的灰色談判", "Two envoys seated across a low table in a tense military tent, behind them layered shadows of armies waiting outside, representing negotiation as delay, deception, and intelligence gathering."),
-        ("明軍入朝與平壤大捷", "Ming troops assaulting a snow-covered fortress city with cannons, fire arrows, ladders, and banners in coordinated attack, dramatic winter smoke rising over the walls, representing the recapture of Pyongyang."),
-        ("碧蹄館遭遇戰", "A chaotic winter road battle near a roadside station, cavalry and infantry colliding in close combat, fog, banners, and exhausted soldiers, representing uncertainty and contested victory."),
-        ("晉州血戰與城池悲劇", "A Korean fortress surrounded by fire and smoke, defenders and civilians crowded on the walls, enemy banners pressing from all sides, representing a desperate siege and civilian catastrophe."),
-        ("明日和談的兩頭欺瞞", "A split diplomatic scene with two separate courts connected by a thin distorted thread, sealed documents glowing in candlelight while masks hang above the table, representing contradictory promises and deception."),
-        ("大坂冊封與和談破裂", "A grand but tense audience hall in Japan, a ceremonial envoy scroll presented under cold light, while a warlord's shadow looms angrily behind a screen, representing the collapse of diplomacy."),
-        ("丁酉再亂再度燃燒", "A second wave of invasion under a dark red sky, coastal fortresses burning again, soldiers marching through smoke and devastated villages, representing renewed war and harsher destruction."),
-        ("漆川梁海戰的慘敗", "A shattered fleet at night, broken masts and burning ships drifting in black water, with storm clouds and scattered survivors, representing a devastating naval defeat."),
-        ("鳴梁海戰的逆轉", "A narrow turbulent strait with a few Korean warships holding formation against a much larger fleet, whirlpools and crashing waves creating dramatic tension, representing tactical brilliance against overwhelming odds."),
-        ("南原與黃石山城的慘烈抵抗", "A mountain fortress and walled city under simultaneous siege, smoke, ladders, defenders, and civilians under a tragic dusk, representing brutal land warfare in southern Korea."),
-        ("蔚山攻城與寒冬圍困", "A coastal Japanese fortress under winter siege, Ming and Korean troops surrounding walls through snow and smoke, starving defenders within, representing the Ulsan campaign."),
-        ("泗川戰役與四路總攻的挫折", "A wide battlefield with divided Ming columns, sudden counterattack, smoke, broken siege lines, and confused banners, representing the risks of multi-front offensives."),
-        ("順天倭城與撤退困局", "A fortified coastal castle beside dark water, trapped troops looking toward distant rescue ships, while allied fleets block the sea route, representing the difficult Japanese withdrawal."),
-        ("露梁海戰與李舜臣之死", "A dawn naval battle filled with smoke, fire arrows, clashing ships, and a heroic admiral silhouette struck amid command flags, representing the tragic final sea battle."),
-        ("日軍撤離與戰後廢墟", "A devastated Korean landscape after battle, abandoned armor, burned villages, returning refugees, and distant ships disappearing over a grey sea, representing the aftermath of invasion."),
-        ("萬曆東征的歷史意義", "A solemn memorial landscape with Ming, Korean, and oceanic symbolic elements, broken weapons laid before a rising sun over a peaceful coastline, representing sacrifice, resistance, and restored regional order.")
+        (
+            "開場：撕開PM的「技術焦慮」與依賴循環",
+            "A professional product manager sitting at a desk surrounded by abstract locks, with lines connecting to glowing servers and floating code blocks in the background."
+        ),
+        (
+            "PM看不懂代碼陷入的依賴循環",
+            "A person standing in front of giant interlocking gear wheels that are tangled with lines of code, waiting for a developer to turn them."
+        ),
+        (
+            "等上兩天或更久的無奈",
+            "A classic hourglass on a wooden desk, sand flowing slowly, with shadows of calendars and clock faces on the wall."
+        ),
+        (
+            "對話式與代理式 AI 的區別",
+            "A split concept illustration. Left: a simple chat bubble icon. Right: autonomous glowing AI agent birds flying between files and blueprint drawings."
+        ),
+        (
+            "AI 可以直接讀寫項目文件，在硬碟上生成分析報告",
+            "An invisible hand composed of particles flipping pages and editing blueprints and code files on a desk."
+        ),
+        (
+            "直接讀寫 Jira、Slack、Figma 和數據庫",
+            "A shining tech tree where branches grow into icons representing project tracking, database, chat, and UI design."
+        ),
+        (
+            "非技術背景 PM 面對終端機退縮",
+            "A product manager looking at a large glowing green matrix terminal screen on a dark wall, showing minor hesitation."
+        ),
+        (
+            "終端中按 Shift+Tab AI 生成文檔",
+            "A finger pressing a key on a glowing computer keyboard, causing clean documents and PDF files to float up from the screen."
+        ),
+        (
+            "調查功能「What data does feature access?」",
+            "A large glowing magnifying glass magnifying rows of tables and data flow streams inside a database cylinder."
+        ),
+        (
+            "四大模式覆蓋了 PM 調查功能的絕大多數場景",
+            "A compass pointing to four distinct glowing quadrants on a map, symbolizing four investigation scenarios."
+        ),
+        (
+            "安全漏洞分析與性能瓶頸",
+            "A complex glowing circuit maze with red warning dots at key intersections, being analyzed by a probe of light."
+        ),
+        (
+            "不僅是技術問題，更是團隊協作的藝術",
+            "A puzzle where a hand of a PM and a hand of a developer fit the final glowing piece together."
+        ),
+        (
+            "步驟 4：形成可測試的假設",
+            "A balancing scale, balancing a glowing lightbulb idea on one side and a scientific flask and ruler on the other."
+        ),
+        (
+            "利用 Claude Code 進行競品與市場分析",
+            "A person looking through binoculars from a peak toward digital mountains, paper planes with charts flying in the sky."
+        ),
+        (
+            "Claude Code 可以存取網路，自己搜索最新資料",
+            "Shining virtual swallows flying through cloud networks, gathering glowing golden fibers and bringing them to a notebook."
+        ),
+        (
+            "強在能幫您結構化您的方法論，並讓假設顯性化",
+            "A 3D transparent geometric grid structure where nested assumptions and boxes are organized perfectly."
+        ),
+        (
+            "呈現給高管層的市場估算報告",
+            "A sunlit meeting room white-board showing a golden arrow curve shooting straight upward."
+        ),
+        (
+            "昨天有一個 VIP 客戶在大發雷霆要求功能",
+            "A bolt of lightning striking a server rack and user feedback cards, creating pressure and urgency."
+        ),
+        (
+            "反饋工單中往往帶有客戶的隱私資料",
+            "A digital folder locked by a glowing security lock, protecting personal text cards inside."
+        ),
+        (
+            "提示詞跑步機（Prompt Treadmill）",
+            "A person running on a glowing treadmill, chasing a carrot shaped like a perfect prompt word hanging in front."
+        ),
+        (
+            "包含名稱和用來觸發 AI 的技能描述",
+            "An open ancient scroll filled with modern API code scripts and functional configurations."
+        ),
+        (
+            "5 大實用工具（反饋綜合器、競品掃描器等）",
+            "A wooden toolbox opened, revealing five distinct glowing tech tools, each emitting a different colored light."
+        ),
+        (
+            "是否有未說明的待辦項目？",
+            "A check list with almost all items checked, with one last unchecked item glowing softly in the dark."
+        ),
+        (
+            "這對 PM 的工作效率意味著效率大躍升",
+            "A glowing mechanical bird soaring high, carrying a PM silhouette above mountains of paperwork."
+        ),
+        (
+            "分析研發留言，找出未解決的技術依賴",
+            "A beam of searchlight illuminating a network of developer comments, highlighting a red warning chain icon."
+        ),
+        (
+            "PM在使用數據庫 MCP 拉取指標時必須連接到唯讀從庫",
+            "A faucet with blue water of binary codes connected to a safe, read-only water tower next to a main server."
+        ),
+        (
+            "PM什麼時候需要派生子代理？這會帶來成本負擔嗎？",
+            "A main bubble splitting into smaller sub-agents, with floating dollar sign shadows below them."
+        ),
+        (
+            "子代理模式中主代理扮演協調者",
+            "An orchestral conductor leading several musicians with different instruments, guiding them into harmony."
+        ),
+        (
+            "每個子代理都要重新讀取基礎文件並載入環境",
+            "Multiple scholars studying the same massive book on a table, with sandglasses symbolizing redundant tasks."
+        ),
+        (
+            "底線：PM絕對不要用 Claude Code 去修改生產代碼庫！",
+            "A thick red laser line blocking access to a glowing, complex central system core representing production codebase."
+        ),
+        (
+            "引導文件變成了團隊唯一的真實來源，兩邊對接",
+            "A bridge connecting two cliffs. On one side a PM, on the other an engineer. An open, glowing manual floats at the center."
+        ),
+        (
+            "AI 擅長處理具體、覆蓋面小的局部任務",
+            "A microscope zooming in on a tiny silicon chip, performing detailed soldering in a microscopic view."
+        ),
+        (
+            "AI會開始變得丟三落四、反覆給出已被否定的建議",
+            "A confused robot holding its head, surrounded by scattered notes and canceled sketches."
+        ),
+        (
+            "剛學會寫技能就寫了極其複雜的年度審查技能",
+            "A person using a giant complex steam-punk machine to prune a tiny daisy flower, representing over-engineering."
+        ),
+        (
+            "謝謝 Robin，也謝謝大家的收聽！",
+            "A warm study desk at night, illuminated by a reading lamp, with the book and a steaming cup of tea on it."
+        )
     ]
+
+    # 安全檢查：若分段數與我們的設計不符，發出警告並使用線性插值 fallback
+    if len(concepts) != total_segments:
+        print(f"Warning: concepts list size ({len(concepts)}) does not match total_segments ({total_segments}). Using interpolation fallback.")
+        use_direct_mapping = False
+    else:
+        use_direct_mapping = True
 
     # 4. 對應生成 Prompts 並寫入 CSV
     os.makedirs(os.path.dirname(csv_path), exist_ok=True)
@@ -103,9 +223,11 @@ def generate_csv():
         for seg_id in range(total_segments):
             segment_text = "\n".join(seg_blocks[seg_id])
             
-            # 使用線性插值將 total_segments 對應到 concepts 列表
-            concept_idx = min(int(seg_id * len(concepts) / total_segments), len(concepts) - 1)
-            concept_title, concept_desc = concepts[concept_idx]
+            if use_direct_mapping:
+                concept_title, concept_desc = concepts[seg_id]
+            else:
+                concept_idx = min(int(seg_id * len(concepts) / total_segments), len(concepts) - 1)
+                concept_title, concept_desc = concepts[concept_idx]
             
             # 生成序號（從 00 開始）
             seq_num = f"{seg_id:02d}"

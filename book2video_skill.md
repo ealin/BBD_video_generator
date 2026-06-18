@@ -28,18 +28,37 @@
 
 ### Phase 2: 語音與行銷素材生成
 5. **[AI 執行] 批量語音合成**：**（須先取得 Step 4 審查通過）** AI 修改並執行 `generate_audio.py` (更新 Book ID)，呼叫 Edge-TTS 將 Step4 腳本轉換為 `txt130` 與 `voice130` 內的檔案，確保空行也能正確產生靜音檔。
-6. **[AI 執行] YouTube Meta 生成**：AI 根據書籍內容生成：主標題、副標題、縮圖標題、SEO Tags、影片說明等，並存入 `B130_XXX/raw/info.txt`。
-   * ⏸️ **[等待審查]** AI 必須在此暫停，提醒使用者審查並確認 `info.txt` 中的「縮圖標題」是否無誤。必須在使用者確認無誤後，方可繼續後續的縮圖生成與合成。
+6. **[AI 執行] YouTube Meta 生成**：AI 根據書籍內容與行銷原則生成主標題、副標題、縮圖標題、SEO Tags、影片說明等，並存入 `B130_XXX/raw/info.txt`。
+   * 💡 **【YouTube 標題與縮圖行銷設計原則】**：
+     1. **品牌與書名雙重定錨 (Double-Anchoring Format)**：影片主標題與縮圖標題開頭格式必須結合「知名品牌/主角」與「書名」，例如：`《知名品牌・書名》`（如《SpaceX・衝向火星》），在 0.5 秒內點出核心主題。
+     2. **高衝突悖論對比 (High-Contrast Paradox)**：標題應強烈呈現角色的「谷底逆境」（如：連環爆、幾乎賣房破產）與「峰值成就」（如：兩兆美元、史上最高金額IPO）之反差，利用矛盾與反直覺激發點閱慾望。
+     3. **客觀張力代替浮誇渲染 (Objective Tension over Hype)**：拒絕使用「驚天」、「最瘋狂」、「破銅爛鐵」等俗套形容詞；改用具戲劇張力的客觀事實與專業詞彙（如「連環爆」、「幾乎賣房破產」、「商業帝國」、「IPO」），維持高端知識型頻道的專業格調。
+     4. **縮圖雙句分工 (Thumbnail Text Separation)**：
+        - *第一句 (吸睛張力)*：放置高衝突對比或巨額數字（如：從破產邊緣到2兆美元商業帝國）。
+        - *第二句 (主題定錨)*：固定放置品牌與書名（如：SpaceX・衝向火星），建立頻道的品牌辨識度。
+   * ⏸️ **[等待審查]** AI 必須在此暫停，提醒使用者審查並確認 `info.txt` 中的「主標題」與「縮圖標題」是否無誤。必須在使用者確認無誤後，方可繼續後續的縮圖生成與合成。
 7. **[人工準備] 視覺素材收集**：
    * ⏸️ **[等待上傳]** AI 提醒使用者提供並上傳：作者大頭照、書籍封面 (`中文封面` / `原文封面`)，確認 `AV` 目錄已包含標準命名的 `訪談START.mp4` 與 `訪談END.mp4`。
 
 ### Phase 3: 影像生成規劃與製作
 8. **[AI 執行] 分段生圖腳本與網頁生圖自動化**：
    - **A. 生成 CSV**：AI 修改並執行 `generate_prompts.py`，將腳本切分為約 30-47 段，並生成 1:1 解析度的生圖 Prompt，匯出至 `分段生圖腳本.csv`。
-   - **B. 自動化批量生圖 (ChatGPT/Gemini)**：AI 修改並執行 `auto_generate_images.py`（設定正確的 `BOOK_ID` 與 `CSV_PATH`）。利用 `--engine [chatgpt|gemini]` 參數指定生圖平台。
-     * *操作指引*：Playwright 瀏覽器會以有頭模式（headless=False）啟動。AI 會提示使用者手動在視窗中一鍵登入 Google 帳號 `ealin.chiu@gmail.com`，完成後程式將自動全自動化批量輸入生圖。
-     * *核心設計*：所有圖片都將在**同一個對話 Session** 中循序生成，以維持極佳的插圖畫風一致性。生圖 Prompt 會保留序號（例如 `30.`），使大模型正確區分為不同插圖需求。
-     * *無損極速下載*：腳本整合了獨創的 **Canvas 影像二進位提取下載器**，可瞬間（0.1 秒）將 `blob:` 圖片解碼儲存為 `0.png`, `1.png`... 存入 `bg_image/bg{book_id}/`，並提供模擬 Hover 下載、Lightbox 下載、HTTP 下載與元素截圖等多重容錯備份機制。
+     * 💡 **【生圖 Prompt 設計三大核心原則】**：
+       1. **語意貼合與動態故事性 (Narrative & Metaphorical Alignment)**：插圖設計必須更貼近分段 dialogue 內容、章節主旨及整本書的主底。應避免死板的財經概念平鋪直敘，改用具備故事性、敘事張力及隱喻性的視覺畫面（例如：以「時鐘內流沙化為金幣消逝」隱喻通膨侵蝕、以「深根發光的橡樹」隱喻複利成長、以「暴風雨中禪院內的打坐僧侶」隱喻面對波動的心不動）。
+       2. **統一的現代商務水彩風格基底 (Business Watercolor Style)**：
+          - 規格：`Aspect ratio 1:1, square format, exactly 1024x1024 resolution`。
+          - 畫風描述：`premium modern business editorial watercolor illustration, richly visible cold-pressed paper texture, expressive charcoal linework, layered translucent watercolor washes, subtle light rays`。
+          - 氛圍：`thoughtful, inspiring, and premium, not cartoonish and not fantasy`。
+          - 色調：`deep navy blue, warm sand ivory, soft forest green, muted charcoal grey, and restrained gold accents`。
+       3. **【鐵律】無文字與浮水印限制 (Strict Zero-Text Constraint)**：
+          - Prompt 尾部必須附帶風格約束：`Absolutely no text, no words, no alphabet letters, no numbers, no logos, and no watermark visible anywhere. The image must communicate only through symbolic, clean visual concepts.`
+     * 🛠️ **【沙盒環境下 Prompt 設計方法】**：因執行沙盒常無 API Key 權限，AI 應先在會話中讀取切段文字，運用自身的推理能力設計出 29-47 段故事性 prompts，並將這些 prompts 寫入/更新至 `generate_prompts.py` 來寫入 CSV，避開運行期 API 呼叫失敗。
+   - **B. 自動化批量生圖 (ChatGPT/Gemini 雙引擎併發執行)**：AI 執行 `auto_generate_images.py`。
+     * 🏎️ **雙引擎併發執行（平行工作）**：偶數編號的圖要用 ChatGPT 產生，奇數編號的圖用 Gemini 產生，可以平行工作。可併發啟動 ChatGPT（負責偶數編號圖片：`--engine chatgpt --even`）與 Gemini（負責奇數編號圖片：`--engine gemini --odd`），加速 50% 的生圖時間。
+     * ⚙️ **獨立 Profile 避鎖**：ChatGPT 和 Gemini 必須分別使用獨立的 Playwright Profile（例如 `~/.playwright_chatgpt_profile` 與 `~/.playwright_gemini_profile`）以防同時開啟時發生 Chromium 的 Session 鎖衝突。
+     * 🔑 **Gemini 傳送按鈕修復**：Gemini 輸入框中按 `Enter` 僅會換行，因此自動化腳本必須點擊 Send 按鈕（或使用 `Control+Enter` 組合鍵）以防 prompt 無法成功送出。
+     * *操作指引*：Playwright 瀏覽器會以有頭模式（headless=False）啟動。AI 會提示使用者手動在視窗中一鍵登入 Google 帳號 `ealin.chiu@gmail.com`，完成後程式將自動批量輸入生圖。
+     * *無損極速下載*：腳本整合了 Canvas 影像二進位提取下載器，可瞬間將 `blob:` 圖片解碼儲存為 `0.png`, `1.png`... 存入 `photo/bg{book_id}/`，並提供模擬 Hover 下載、Lightbox 下載、HTTP 下載與元素截圖等多重容錯備份機制。
 9. **[AI 執行] YouTube 縮圖自動化合成**：
    - **A. 自動化生圖背景**：AI 提取 `info.txt` 中的「縮圖標題」及概念，使用 `generate_image` 繪圖工具**直接生成精美的高端水彩商務風格背景圖**。
      * ⚠️ **核心規範（防裁切安全邊距）**：Prompt 必須包含 **「構圖留白與防裁切安全區（Padded Safe Area）」** 指令，要求主體元素（如 Pi 符號、齒輪或地圖）在 1:1 的畫布中央縮小、精巧呈現，並在四周預留大面積純色/漸層水彩暈染。這樣在 PIL 自動裁切為 16:9（1920x1080）時，核心圖案能 100% 完整居中，絕不產生任何拉伸、截斷與失真。

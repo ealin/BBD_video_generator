@@ -4,7 +4,7 @@ import re
 
 def find_book_dir(book_id):
     for item in os.listdir('.'):
-        if os.path.isdir(item) and (item.startswith(f"{book_id}_") or item.startswith(f"B{book_id}_") or item.startswith(f"1{book_id}_")):
+        if os.path.isdir(item) and (item.startswith(f"{book_id}_") or item.startswith(f"B{book_id}_") or item.startswith(f"1{book_id}_") or item.startswith(f"{book_id}-") or item.startswith(f"B{book_id}-") or item.startswith(f"1{book_id}-")):
             return item
     raise FileNotFoundError(f"Cannot find book directory starting with {book_id}_")
 
@@ -52,7 +52,7 @@ def run_checks():
     
     # 1. 檢查 info.txt
     print("\n[項目 1] 檢查 info.txt...")
-    book_id = "141"
+    book_id = "144"
     book_dir = find_book_dir(book_id)
 
     info_path = f"{book_dir}/raw/info.txt"

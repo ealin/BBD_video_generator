@@ -172,12 +172,12 @@ def process_script(input_path, output_path, max_chars=24, max_segment_lines=2):
 
 def find_book_dir(book_id):
     for item in os.listdir('.'):
-        if os.path.isdir(item) and (item.startswith(f"{book_id}_") or item.startswith(f"B{book_id}_") or item.startswith(f"1{book_id}_")):
+        if os.path.isdir(item) and (item.startswith(f"{book_id}_") or item.startswith(f"B{book_id}_") or item.startswith(f"1{book_id}_") or item.startswith(f"{book_id}-") or item.startswith(f"B{book_id}-") or item.startswith(f"1{book_id}-")):
             return item
     raise FileNotFoundError(f"Cannot find book directory starting with {book_id}_")
 
 if __name__ == "__main__":
-    BOOK_ID = "141"
+    BOOK_ID = "144"
     book_dir = find_book_dir(BOOK_ID)
     base_dir = os.path.join(book_dir, "raw")
     max_chars          = 30   # 每行最多幾個字元
