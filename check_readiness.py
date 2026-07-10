@@ -52,7 +52,7 @@ def run_checks():
     
     # 1. 檢查 info.txt
     print("\n[項目 1] 檢查 info.txt...")
-    book_id = "144"
+    book_id = "146"
     book_dir = find_book_dir(book_id)
 
     info_path = f"{book_dir}/raw/info.txt"
@@ -73,6 +73,14 @@ def run_checks():
             print(f"  ✗ info.txt 缺漏欄位: {missing_fields}")
     else:
         print(f"  ✗ 找不到 info.txt (預期路徑: {info_path})")
+        
+    # 1.1 檢查發音人清單.csv
+    print("  - 檢查發音人清單...")
+    spk_csv_path = f"{book_dir}/raw/發音人清單.csv"
+    if os.path.exists(spk_csv_path):
+        print(f"  ✓ 找到發音人清單: {spk_csv_path}")
+    else:
+        print(f"  ✗ 找不到發音人清單 (預期路徑: {spk_csv_path})")
         
     # 2. 檢查 youtube_thumbnail.png
     print("\n[項目 2] 檢查縮圖檔案...")
