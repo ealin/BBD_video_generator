@@ -4,7 +4,7 @@ import subprocess
 import argparse
 
 # 設定 BOOK_ID 與動態目錄尋找 (保留此處供手動修改與回溯相容)
-BOOK_ID = "144"
+BOOK_ID = "146"
 
 # TTS 聲音設定 (Edge-TTS)
 VOICE_MALE_HOST = "zh-TW-YunJheNeural"      # 男主持：年輕活潑
@@ -116,6 +116,7 @@ def process_segments(book_id=BOOK_ID, engine="edge-tts"):
     role_name = "AA (Male Host)"
     
     # 處理所有段落
+    speaker_list = []
     for i, segment in enumerate(segments):
         segment_id = i + 1
         
@@ -142,6 +143,29 @@ def process_segments(book_id=BOOK_ID, engine="edge-tts"):
         txt_path = os.path.join(TXT_DIR, txt_filename)
         mp3_filename = f"B{book_id}_{segment_id:04d}.mp3"
         mp3_path = os.path.join(VOICE_DIR, mp3_filename)
+
+        # 紀錄發音者資訊
+        role_marker = ""
+        if segment.startswith("。。。"):
+            role_marker = "。。。"
+        elif segment.startswith("。。"):
+            role_marker = "。。"
+        elif segment.startswith("。"):
+            role_marker = "。"
+        elif segment.startswith(">>>>"):
+            role_marker = ">>>> (章節標頭)"
+        elif segment.startswith("@@@@"):
+            role_marker = "@@@@ (轉場空秒)"
+        else:
+            role_marker = "未標記"
+
+        speaker_list.append({
+            "檔名": mp3_filename,
+            "角色標記": role_marker,
+            "角色名稱": role_name if not (segment.startswith(">>>>") or segment.startswith("@@@@")) else "系統符號",
+            "TTS語音": current_voice if engine == "edge-tts" else f"Index-TTS ({role_name})",
+            "文字內容": segment.replace('\n', ' ')[:50]
+        })
 
         # 智慧比對：若已有相同文字檔且音檔大小大於 0，則直接跳過生成
         is_identical = False
@@ -231,6 +255,16 @@ def process_segments(book_id=BOOK_ID, engine="edge-tts"):
                         time.sleep(2)
             if not success:
                 print(f"  -> ❌ Index-TTS 生成 {mp3_filename} 最終失敗！")
+
+    # 寫入發音人清單 CSV 檔
+    csv_file = os.path.join(book_dir, "raw", "發音人清單.csv")
+    import csv
+    with open(csv_file, 'w', encoding='utf-8-sig', newline='') as f_csv:
+        writer = csv.writer(f_csv)
+        writer.writerow(["檔名", "角色標記", "角色名稱", "TTS語音", "文字內容"])
+        for item in speaker_list:
+            writer.writerow([item["檔名"], item["角色標記"], item["角色名稱"], item["TTS語音"], item["文字內容"]])
+    print(f"\n✓ 發音人清單已成功輸出至: {csv_file}")
 
     # 完整性驗證：避免中途停止時誤以為 txt/mp3 數量相等就是完成
     missing_txt = []
