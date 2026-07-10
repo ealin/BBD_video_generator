@@ -10,7 +10,7 @@ from moviepy.audio import *
 from moviepy.audio.AudioClip import AudioClip
 from moviepy.video.VideoClip import VideoClip
 # 導入特效
-from moviepy.video.fx import FadeIn, FadeOut, CrossFadeIn, CrossFadeOut, Scroll, MaskColor
+from moviepy.video.fx import FadeIn, FadeOut, CrossFadeIn, CrossFadeOut, Scroll, MaskColor, Loop
 from moviepy.audio.fx import AudioFadeIn, AudioFadeOut, AudioNormalize
 import time
 from proglog import ProgressBarLogger
@@ -287,7 +287,7 @@ def make_crop_zoom_clip(img_path, duration, target_size, zoom_stops_at, radius=4
     return clip.with_mask(mask_clip)
 
 
-def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file, start_second, topic_index, bg_img_ID, bg_type=0, mode="all"):
+def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file, start_second, topic_index, bg_img_ID, bg_type=0, mode="all", head_type="static_head"):
     """
     核心功能：從指定目錄讀取 .txt 和 .mp3，生成三個同步影片：
     1. 背景影片 (_img)
@@ -389,6 +389,7 @@ def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file
         print(f"尋找書籍目錄時出錯: {e_find}")
 
     photo_dir = os.path.join(book_dir, "photo") if book_dir else None
+    stickman_dir = os.path.join(book_dir, "raw", "stickman_green") if book_dir else None
 
     # 用於安全載入頭像的輔助函式，支援多層級備用
     def resolve_avatar_path(avatar_name, p_dir):
@@ -721,52 +722,71 @@ def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file
                 img_clips.append(img_video_clip)
 
 
-            # --- 頭像影片 (Head) 製作 (PIL 合成 + 縮放) ---
+            # --- 頭像影片 (Head) 製作 (PIL 合成 + 縮放 或 動態綠幕) ---
 
-            # [Claude Comment] : 以純綠底 PIL Image 作為頭像軌道畫布，後製時可色鍵去背
-            base_img = Image.new("RGB", (1920, 1080), background_color)
-
-            if current_avatar_img is not None:
-                try:
-                    avatar_pil = Image.open(current_avatar_img).convert("RGBA")
-
-                    # 裁切成正方形 (取中間部分)
-                    min_side = min(avatar_pil.size)
-                    left = (avatar_pil.width - min_side) / 2
-                    top = (avatar_pil.height - min_side) / 2
-                    right = (avatar_pil.width + min_side) / 2
-                    bottom = (avatar_pil.height + min_side) / 2
-                    avatar_pil = avatar_pil.crop((left, top, right, bottom))
-
-                    # [Claude Comment] : 縮放至目標大小 (正方形)
-                    avatar_pil = avatar_pil.resize((head_width, head_width), Image.Resampling.LANCZOS)
-                    new_height = head_width
+            if head_type == "dynamic_body":
+                if subtitle_text == ">>>>" or starts_with_pattern(subtitle_text, "@@@@"):
+                    # 系統符號或轉場過場：使用純綠幕
+                    head_video_clip = ColorClip(size=(1920, 1080), color=background_color, duration=duration)
+                else:
+                    stickman_mp4_path = None
+                    if stickman_dir:
+                        stickman_mp4_path = os.path.join(stickman_dir, f"{base_name}.mp4")
                     
-                    # 建立圓形遮罩
-                    mask = Image.new('L', (head_width, head_width), 0)
-                    draw = ImageDraw.Draw(mask)
-                    draw.ellipse((0, 0, head_width, head_width), fill=255)
-                    
-                    # 若原圖有透明度，將原本的 alpha 通道與圓形遮罩做交集 (darker)
-                    _, _, _, alpha = avatar_pil.split()
-                    new_alpha = ImageChops.darker(alpha, mask)
-                    avatar_pil.putalpha(new_alpha)
+                    if stickman_mp4_path and os.path.exists(stickman_mp4_path):
+                        clip = VideoFileClip(stickman_mp4_path)
+                        if clip.duration >= duration:
+                            head_video_clip = clip.subclipped(0, duration)
+                        else:
+                            head_video_clip = clip.with_effects([Loop(duration=duration)])
+                    else:
+                        print(f"⚠️ 找不到動態綠幕影片 {stickman_mp4_path if stickman_mp4_path else ''}，使用綠幕背景替代")
+                        head_video_clip = ColorClip(size=(1920, 1080), color=background_color, duration=duration)
+            else:
+                # [Claude Comment] : 以純綠底 PIL Image 作為頭像軌道畫布，後製時可色鍵去背
+                base_img = Image.new("RGB", (1920, 1080), background_color)
 
-                    # [20260306 update] 動態計算頭像 Y 座標：確保所有頭像的「左下角」對齊
-                    # 因為 base_string_top 現在是絕對固定的，所以這裡算出來的底部 Y 座標也會絕對固定
-                    # 公式：字幕第一行 Y 座標 (base_string_top) - 頭像縮放後高度 (new_height) - 10 pixels 距離
-                    avatar_y = base_string_top - new_height - Avatar_Sub_offset
-                    current_avatar_pos = (current_avatar_x, avatar_y)
+                if current_avatar_img is not None:
+                    try:
+                        avatar_pil = Image.open(current_avatar_img).convert("RGBA")
 
-                    # [Claude Comment] : 使用 RGBA 的 alpha 通道作為遮罩，正確貼合帶透明度的 PNG 頭像
-                    base_img.paste(avatar_pil, current_avatar_pos, avatar_pil)
+                        # 裁切成正方形 (取中間部分)
+                        min_side = min(avatar_pil.size)
+                        left = (avatar_pil.width - min_side) / 2
+                        top = (avatar_pil.height - min_side) / 2
+                        right = (avatar_pil.width + min_side) / 2
+                        bottom = (avatar_pil.height + min_side) / 2
+                        avatar_pil = avatar_pil.crop((left, top, right, bottom))
 
-                except Exception as e:
-                    print(f"警告：無法載入或處理頭像圖片 {current_avatar_img}: {e}")
+                        # [Claude Comment] : 縮放至目標大小 (正方形)
+                        avatar_pil = avatar_pil.resize((head_width, head_width), Image.Resampling.LANCZOS)
+                        new_height = head_width
+                        
+                        # 建立圓形遮罩
+                        mask = Image.new('L', (head_width, head_width), 0)
+                        draw = ImageDraw.Draw(mask)
+                        draw.ellipse((0, 0, head_width, head_width), fill=255)
+                        
+                        # 若原圖有透明度，將原本的 alpha 通道與圓形遮罩做交集 (darker)
+                        _, _, _, alpha = avatar_pil.split()
+                        new_alpha = ImageChops.darker(alpha, mask)
+                        avatar_pil.putalpha(new_alpha)
 
-            # [Claude Comment] : 將 PIL Image 轉為 numpy array 後建立 MoviePy ImageClip
-            final_head_frame = np.array(base_img)
-            head_video_clip = ImageClip(final_head_frame).with_duration(duration)
+                        # [20260306 update] 動態計算頭像 Y 座標：確保所有頭像的「左下角」對齊
+                        # 因為 base_string_top 現在是絕對固定的，所以這裡算出來的底部 Y 座標也會絕對固定
+                        # 公式：字幕第一行 Y 座標 (base_string_top) - 頭像縮放後高度 (new_height) - 10 pixels 距離
+                        avatar_y = base_string_top - new_height - Avatar_Sub_offset
+                        current_avatar_pos = (current_avatar_x, avatar_y)
+
+                        # [Claude Comment] : 使用 RGBA 的 alpha 通道作為遮罩，正確貼合帶透明度的 PNG 頭像
+                        base_img.paste(avatar_pil, current_avatar_pos, avatar_pil)
+
+                    except Exception as e:
+                        print(f"警告：無法載入或處理頭像圖片 {current_avatar_img}: {e}")
+
+                # [Claude Comment] : 將 PIL Image 轉為 numpy array 後建立 MoviePy ImageClip
+                final_head_frame = np.array(base_img)
+                head_video_clip = ImageClip(final_head_frame).with_duration(duration)
 
             head_clips.append(head_video_clip)
             # ---------------------------------
@@ -1130,20 +1150,25 @@ def create_countdown_video(minutes, seconds, font, fontsize, color, position, ou
 # --------------------------------------------------------------------------------------------------
 
 # Configuration
-book_ID = '144'
+book_ID = '146'
 clip_number = 1         # 總共分為幾段 (B77-1, B77-2, B77-3)
 string_align = 'left'   # 'center': 靠中偏右; 'left': 對齊左邊邊框
 
 # bg_img_type = 0 : 使用bg_image目錄下的圖檔 (例如： "bg_image/bg_126/0.jpg....")，製作背景影片
 # bg_img_type = 1 : 依據最後影片的長度，反覆播放 default_bg_video 填滿背景影片
-BG_Type = 1
+BG_Type = 0
 
 # 渲染模式選擇：
 # 'all'  : 生成全部影片 (Sub, Head, Img)
 # 'sub'  : 僅生成綠幕字幕與插圖貼圖影片 (output1_sub.mp4)
 # 'head' : 僅生成綠幕頭像影片 (output1_head.mp4)
 # 'img'  : 僅生成背景影片 (output1_img.mp4)
-render_mode = 'img'
+render_mode = 'all'
+
+# 頭像影片類型選擇：
+# 'static_head' : 原本的 PIL 圓形頭像疊加
+# 'dynamic_body': 載入 raw/stickman_green 的綠幕動態火柴人影片
+head_type = 'dynamic_body'
 
 # [Claude Comment] : 每段影片可指定不同的循環背景影片，目前四段皆使用同一個黑膠唱盤動畫
 default_bg_video = 'data/背景影片/coding.mp4'
@@ -1192,7 +1217,7 @@ topic_num1, video_length1, start_bg_img_ID = \
         voice_dir,
         bg_img_dir,
         output_video,
-        0, 0, 0, bg_type=BG_Type, mode=render_mode
+        0, 0, 0, bg_type=BG_Type, mode=render_mode, head_type=head_type
     )
 video_length4 = video_length1
 
