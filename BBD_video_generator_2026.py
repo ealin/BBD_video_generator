@@ -138,9 +138,9 @@ def wrap_text_by_width(text, font, max_width=1650):
     return '\n'.join(final_lines)
 
 def make_pil_subtitle_clip(text, font_path, font_size, color, stroke_color,
-                            stroke_width, extra_spacing, duration):
+                            stroke_width, extra_spacing, duration, sub_font_type="default"):
     """
-    使用 PIL 繪製多行字幕（RGBA 透明背景），支援自訂行距。
+    使用 PIL 繪製多行字幕（RGBA 透明背景），支援自訂行距，並可選擇三種字幕樣式。
     """
     try:
         font = ImageFont.truetype(font_path, font_size)
@@ -149,7 +149,6 @@ def make_pil_subtitle_clip(text, font_path, font_size, color, stroke_color,
 
     # Apply auto-wrapping to prevent text cut-off on edges
     text = wrap_text_by_width(text, font, max_width=1650)
-
     lines = text.split('\n') if '\n' in text else [text]
 
     # 測量每行尺寸
@@ -160,26 +159,62 @@ def make_pil_subtitle_clip(text, font_path, font_size, color, stroke_color,
     line_heights = [b[3] - b[1] for b in bboxes]
     line_offsets = [b[1]        for b in bboxes]   # 字型基線偏移量
 
-    margin  = stroke_width + 4
-    img_w   = max(line_widths) + margin * 2 + 10
-    img_h   = (sum(line_heights)
-               + extra_spacing * max(len(lines) - 1, 0)
-               + margin * 2 + 10)
+    total_height = sum(line_heights) + extra_spacing * max(len(lines) - 1, 0)
+    max_w = max(line_widths)
 
-    img  = Image.new('RGBA', (img_w, img_h), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(img)
-
-    y = margin
-    for ln, lh, lo in zip(lines, line_heights, line_offsets):
-        # 描邊（向各方向偏移 stroke_width 個像素）
-        for dx in range(-stroke_width, stroke_width + 1):
-            for dy in range(-stroke_width, stroke_width + 1):
-                if dx * dx + dy * dy <= stroke_width ** 2:
-                    draw.text((margin + dx, y - lo + dy), ln or ' ',
-                               font=font, fill=stroke_color)
-        # 主體文字
-        draw.text((margin, y - lo), ln or ' ', font=font, fill=color)
-        y += lh + extra_spacing
+    if sub_font_type == "white_trans_black_bg":
+        # 白色字體 + 半透明黑色背景卡
+        pad_x = 24
+        pad_y = 16
+        img_w = max_w + pad_x * 2
+        img_h = total_height + pad_y * 2
+        
+        img = Image.new('RGBA', (img_w, img_h), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(img)
+        
+        # 繪製半透明圓角背景 (alpha 約為 150)
+        draw.rounded_rectangle((0, 0, img_w, img_h), radius=12, fill=(0, 0, 0, 150))
+        
+        y = pad_y
+        for ln, lh, lo in zip(lines, line_heights, line_offsets):
+            draw.text((pad_x, y - lo), ln or ' ', font=font, fill=(255, 255, 255))
+            y += lh + extra_spacing
+            
+    elif sub_font_type == "white_black_border":
+        # 白色字體帶黑邊
+        margin = stroke_width + 4
+        img_w = max_w + margin * 2 + 10
+        img_h = total_height + margin * 2 + 10
+        
+        img = Image.new('RGBA', (img_w, img_h), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(img)
+        
+        y = margin
+        for ln, lh, lo in zip(lines, line_heights, line_offsets):
+            for dx in range(-stroke_width, stroke_width + 1):
+                for dy in range(-stroke_width, stroke_width + 1):
+                    if dx * dx + dy * dy <= stroke_width ** 2:
+                        draw.text((margin + dx, y - lo + dy), ln or ' ', font=font, fill='black')
+            draw.text((margin, y - lo), ln or ' ', font=font, fill=(255, 255, 255))
+            y += lh + extra_spacing
+            
+    else: # "default"
+        # 原本樣式 (說話人自訂色彩 + 黑邊)
+        margin = stroke_width + 4
+        img_w = max_w + margin * 2 + 10
+        img_h = total_height + margin * 2 + 10
+        
+        img = Image.new('RGBA', (img_w, img_h), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(img)
+        
+        y = margin
+        for ln, lh, lo in zip(lines, line_heights, line_offsets):
+            for dx in range(-stroke_width, stroke_width + 1):
+                for dy in range(-stroke_width, stroke_width + 1):
+                    if dx * dx + dy * dy <= stroke_width ** 2:
+                        draw.text((margin + dx, y - lo + dy), ln or ' ', font=font, fill=stroke_color)
+            draw.text((margin, y - lo), ln or ' ', font=font, fill=color)
+            y += lh + extra_spacing
 
     arr = np.array(img)
     return ImageClip(arr, is_mask=False).with_duration(duration)
@@ -287,7 +322,7 @@ def make_crop_zoom_clip(img_path, duration, target_size, zoom_stops_at, radius=4
     return clip.with_mask(mask_clip)
 
 
-def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file, start_second, topic_index, bg_img_ID, bg_type=0, mode="all", head_type="static_head"):
+def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file, start_second, topic_index, bg_img_ID, bg_type=0, mode="all", head_type="static_head", sub_font_type="default"):
     """
     核心功能：從指定目錄讀取 .txt 和 .mp3，生成三個同步影片：
     1. 背景影片 (_img)
@@ -688,6 +723,7 @@ def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file
                         stroke_width     = font_strok_width,
                         extra_spacing    = extra_line_spacing,
                         duration         = duration,
+                        sub_font_type    = sub_font_type
                     ).with_position((string_left, string_top)) \
                      .with_start(acc_second)
                     text_layer_clips.append(t_clip)
@@ -1179,6 +1215,12 @@ render_mode = 'all'
 # 'dynamic_body': 載入 raw/stickman_green 的綠幕動態火柴人影片
 head_type = 'dynamic_body'
 
+# 字幕字體樣式選擇：
+# 'default'            : 說話人自訂色彩 + 黑邊
+# 'white_black_border' : 白色字體 + 黑邊
+# 'white_trans_black_bg': 白色字體 + 半透明黑色背景卡
+sub_font_type = 'default'
+
 # [Claude Comment] : 每段影片可指定不同的循環背景影片，目前四段皆使用同一個黑膠唱盤動畫
 default_bg_video = 'data/背景影片/台幣.mp4'
 default_bg_video2 = 'data/黑膠2.mp4'
@@ -1226,7 +1268,7 @@ topic_num1, video_length1, start_bg_img_ID = \
         voice_dir,
         bg_img_dir,
         output_video,
-        0, 0, 0, bg_type=BG_Type, mode=render_mode, head_type=head_type
+        0, 0, 0, bg_type=BG_Type, mode=render_mode, head_type=head_type, sub_font_type=sub_font_type
     )
 video_length4 = video_length1
 
