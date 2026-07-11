@@ -735,10 +735,19 @@ def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file
                     
                     if stickman_mp4_path and os.path.exists(stickman_mp4_path):
                         clip = VideoFileClip(stickman_mp4_path)
+                        if clip.h != 1080:
+                            clip = clip.resized(height=1080)
+                        
                         if clip.duration >= duration:
-                            head_video_clip = clip.subclipped(0, duration)
+                            clip_processed = clip.subclipped(0, duration)
                         else:
-                            head_video_clip = clip.with_effects([Loop(duration=duration)])
+                            clip_processed = clip.with_effects([Loop(duration=duration)])
+                        
+                        # 建立 1920x1080 的綠幕畫布並將影片置中放置，以確保解析度完全一致，防止畫面錯位
+                        green_canvas = ColorClip(size=(1920, 1080), color=background_color, duration=duration)
+                        pos_x = (1920 - clip_processed.w) // 2
+                        positioned_clip = clip_processed.with_position((pos_x, 0))
+                        head_video_clip = CompositeVideoClip([green_canvas, positioned_clip], size=(1920, 1080))
                     else:
                         print(f"⚠️ 找不到動態綠幕影片 {stickman_mp4_path if stickman_mp4_path else ''}，使用綠幕背景替代")
                         head_video_clip = ColorClip(size=(1920, 1080), color=background_color, duration=duration)
@@ -1156,7 +1165,7 @@ string_align = 'left'   # 'center': 靠中偏右; 'left': 對齊左邊邊框
 
 # bg_img_type = 0 : 使用bg_image目錄下的圖檔 (例如： "bg_image/bg_126/0.jpg....")，製作背景影片
 # bg_img_type = 1 : 依據最後影片的長度，反覆播放 default_bg_video 填滿背景影片
-BG_Type = 0
+BG_Type = 1
 
 # 渲染模式選擇：
 # 'all'  : 生成全部影片 (Sub, Head, Img)
@@ -1171,7 +1180,7 @@ render_mode = 'all'
 head_type = 'dynamic_body'
 
 # [Claude Comment] : 每段影片可指定不同的循環背景影片，目前四段皆使用同一個黑膠唱盤動畫
-default_bg_video = 'data/背景影片/coding.mp4'
+default_bg_video = 'data/背景影片/台幣.mp4'
 default_bg_video2 = 'data/黑膠2.mp4'
 default_bg_video3 = 'data/黑膠2.mp4'
 default_bg_video4 = 'data/黑膠2.mp4'
