@@ -98,7 +98,13 @@ def process_single_file(mp3_path, output_mp4_path, character_name, session_path,
         }""")
         time.sleep(2)
 
-        char_success = page.evaluate("""(name) => {
+        # The character grid is a virtualized list: a name that isn't near the top may
+        # simply not be mounted in the DOM yet, so a single query can miss it even though
+        # nothing is "wrong". Retry the query a few times (catches it if it mounts on its
+        # own), and if that fails, actually scroll the panel (real mouse wheel events —
+        # scrolling via JS does not reliably trigger the virtualizer) until the thumbnail
+        # appears, then click it. Never silently fall back to the default character.
+        find_and_click_char_js = """(name) => {
             function queryAllShadow(root, selector) {
                 let res = [];
                 if (!root) return res;
@@ -110,36 +116,63 @@ def process_single_file(mp3_path, output_mp4_path, character_name, session_path,
                 }
                 return res;
             }
-            
-            let thumbs = queryAllShadow(document, 'qa-thumbnail, [role="button"], sp-action-button, div');
-            for (let t of thumbs) {
-                let txt = (t.textContent || '').toLowerCase();
-                let shadowTxt = t.shadowRoot ? (t.shadowRoot.textContent || '').toLowerCase() : '';
-                let id = (t.getAttribute('data-thumbnail-id') || t.getAttribute('id') || '').toLowerCase();
-                let title = (t.getAttribute('title') || t.getAttribute('aria-label') || '').toLowerCase();
-                
-                if (txt.includes(name.toLowerCase()) || shadowTxt.includes(name.toLowerCase()) || id.includes(name.toLowerCase()) || title.includes(name.toLowerCase())) {
-                    let btn = t.shadowRoot ? (t.shadowRoot.querySelector('button') || t.shadowRoot.querySelector('.qa-thumbnail-button') || t) : t;
-                    if (btn) { btn.click(); return true; }
-                }
-            }
-            
+            let thumbs = queryAllShadow(document, 'qa-thumbnail');
+            let t = thumbs.find(el => (el.shadowRoot ? el.shadowRoot.textContent : el.textContent || '').trim() === name);
+            if (!t) return false;
+            let btn = t.shadowRoot ? (t.shadowRoot.querySelector('button') || t.shadowRoot.querySelector('.qa-thumbnail-button')) : null;
+            if (btn) { btn.click(); } else { t.click(); }
             return true;
-        }""", character_name)
-        
+        }"""
+        find_char_rect_js = """(name) => {
+            function queryAllShadow(root, selector) {
+                let res = [];
+                if (!root) return res;
+                let elems = Array.from(root.querySelectorAll(selector));
+                res = res.concat(elems);
+                let all = Array.from(root.querySelectorAll('*'));
+                for (let el of all) {
+                    if (el.shadowRoot) res = res.concat(queryAllShadow(el.shadowRoot, selector));
+                }
+                return res;
+            }
+            let thumbs = queryAllShadow(document, 'qa-thumbnail');
+            let t = thumbs.find(el => (el.shadowRoot ? el.shadowRoot.textContent : el.textContent || '').trim() === name);
+            if (!t) return null;
+            let r = t.getBoundingClientRect();
+            return {x: r.x, y: r.y, w: r.width, h: r.height};
+        }"""
+
+        char_success = False
+        for _ in range(6):
+            char_success = page.evaluate(find_and_click_char_js, character_name)
+            if char_success:
+                break
+            time.sleep(0.7)
+
+        if not char_success:
+            page.mouse.move(900, 400)
+            for _ in range(40):
+                rect = page.evaluate(find_char_rect_js, character_name)
+                if rect and rect["w"] > 0 and 0 <= rect["y"] <= 780:
+                    char_success = page.evaluate(find_and_click_char_js, character_name)
+                    if char_success:
+                        break
+                page.mouse.wheel(0, 300)
+                time.sleep(0.4)
+
         if not char_success:
             print(f"錯誤：選擇 {character_name} 角色失敗！")
             browser.close()
             return False
         time.sleep(2)
-        
+
         # 2. Select green background (#27BB36) via the "自訂顏色" (Custom Color) picker.
         # Adobe Express has no ready-made "green screen" preset thumbnail; the only
         # reliable path is: open Background tab -> Custom Color -> Custom (hex) sub-tab
         # -> type the hex value. Clicks on the *inner* shadow-root button (not the outer
         # custom element, and not raw mouse coordinates) are what reliably register with
         # this virtualized/shadow-DOM UI.
-        bg_tab_success = page.evaluate("""() => {
+        click_bg_tab_js = """() => {
             function queryAllShadow(root, selector) {
                 let res = [];
                 if (!root) return res;
@@ -157,14 +190,22 @@ def process_single_file(mp3_path, output_mp4_path, character_name, session_path,
             let btn = bgTab.shadowRoot ? (bgTab.shadowRoot.querySelector('button') || bgTab.shadowRoot.querySelector('[role="tab"]')) : null;
             if (btn) { btn.click(); } else { bgTab.click(); }
             return true;
-        }""")
+        }"""
+        # The sp-tab list can take a moment to mount after the character panel loads;
+        # retry a few times instead of failing on the first miss.
+        bg_tab_success = False
+        for _ in range(8):
+            bg_tab_success = page.evaluate(click_bg_tab_js)
+            if bg_tab_success:
+                break
+            time.sleep(0.7)
         if not bg_tab_success:
             print("錯誤：找不到「背景」頁籤！")
             browser.close()
             return False
         time.sleep(1.5)
 
-        custom_color_clicked = page.evaluate("""() => {
+        click_custom_color_js = """() => {
             function queryAllShadow(root, selector) {
                 let res = [];
                 if (!root) return res;
@@ -185,7 +226,13 @@ def process_single_file(mp3_path, output_mp4_path, character_name, session_path,
             let btn = t.shadowRoot ? (t.shadowRoot.querySelector('button') || t.shadowRoot.querySelector('.qa-thumbnail-button')) : null;
             if (btn) { btn.click(); } else { t.click(); }
             return true;
-        }""")
+        }"""
+        custom_color_clicked = False
+        for _ in range(8):
+            custom_color_clicked = page.evaluate(click_custom_color_js)
+            if custom_color_clicked:
+                break
+            time.sleep(0.7)
         if not custom_color_clicked:
             print("錯誤：找不到「自訂顏色」背景選項！")
             browser.close()
@@ -193,7 +240,11 @@ def process_single_file(mp3_path, output_mp4_path, character_name, session_path,
         time.sleep(1.2)
 
         # Switch the color-picker popup from "色票 (Swatches)" to "自訂 (Custom)" so a hex
-        # input is available, then type the exact green screen color.
+        # input is available, then type the exact green screen color. Match by the tab's
+        # `value="custom"` attribute, not its visible text label: Adobe's tab labels here
+        # intermittently fail to render as text (an issue on their end, not virtualization),
+        # while the `value` attribute stays stable — the same reason the outer 角色/背景/大小
+        # nav tabs are matched by `value` elsewhere in this file.
         find_custom_tab_js = """() => {
             function queryAllShadow(root, selector) {
                 let res = [];
@@ -206,16 +257,12 @@ def process_single_file(mp3_path, output_mp4_path, character_name, session_path,
                 }
                 return res;
             }
-            function normalize(s) { return (s || '').replace(/[\\u200b\\u200c\\u200d]/g, '').trim(); }
-            let all = queryAllShadow(document, '*');
-            for (let el of all) {
-                let txt = normalize(el.shadowRoot ? el.shadowRoot.textContent : el.textContent);
-                if (txt === '自訂' || txt === 'Custom') {
-                    let r = el.getBoundingClientRect();
-                    if (r.width > 0 && r.width < 200) return {x: r.x, y: r.y, w: r.width, h: r.height};
-                }
-            }
-            return null;
+            let tabs = queryAllShadow(document, 'sp-tab');
+            let t = tabs.find(el => (el.getAttribute('value') || '') === 'custom');
+            if (!t) return null;
+            let r = t.getBoundingClientRect();
+            if (r.width <= 0) return null;
+            return {x: r.x, y: r.y, w: r.width, h: r.height};
         }"""
         custom_tab_rect = None
         for _ in range(6):
