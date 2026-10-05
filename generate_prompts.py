@@ -1,5 +1,6 @@
 import os
 import csv
+import sys
 
 def find_book_dir(book_id):
     for item in os.listdir('.'):
@@ -9,7 +10,7 @@ def find_book_dir(book_id):
 
 def generate_csv():
     # 檔案路徑與設定
-    book_id = "144"
+    book_id = sys.argv[1] if len(sys.argv) > 1 else "146"
     book_dir = find_book_dir(book_id)
     txt_dir = os.path.join(book_dir, "raw", f"txt{book_id}")
     csv_path = os.path.join(book_dir, "raw", "分段生圖腳本.csv")
@@ -51,163 +52,132 @@ def generate_csv():
                 seg_id = total_segments - 1
         seg_blocks[seg_id].append(block_text)
         
-    # 3. 基礎生圖設計風格 (B144: 現代商務水彩風格 - AI 協作與產品經理主題)
+    # 3. 基礎生圖設計風格
+    # 3. 基礎生圖設計風格
+    if book_id == "147":
+        theme = "mindsets, personal growth, and financial wisdom"
+    elif book_id == "148":
+        theme = "asset allocation, portfolio risk management, stock-bond-gold rotation, and financial freedom"
+    else:
+        theme = "value investing, stock picking, and financial statement analysis"
+        
     base_prompt = (
-        "Aspect ratio 1:1, square format, exactly 1024x1024 resolution. Create a premium modern business editorial watercolor illustration "
-        "for a professional book summary video about product management and AI agents. The visual style must combine "
-        "sophisticated software design concepts, digital collaboration, and poetic storytelling. Use richly visible cold-pressed paper texture, "
-        "expressive charcoal linework, layered translucent watercolor washes, and subtle light rays. The mood should be thoughtful, "
-        "inspiring, and premium, not cartoonish and not sci-fi fantasy. Use a sophisticated, harmonious color palette of deep indigo blue, "
-        "warm sand ivory, soft olive green, muted charcoal grey, and restrained gold accents. "
+        f"Aspect ratio 1:1, square format, exactly 1024x1024 resolution. Create a premium modern business editorial watercolor illustration "
+        f"for a professional book summary video about {theme}. "
+        "The visual style must combine financial wisdom, corporate analysis, and poetic storytelling. Use richly visible cold-pressed paper texture, "
+        "extremely faint and delicate pencil sketch outlines, highly blended translucent watercolor washes with soft transitions, and subtle light rays. "
+        "No heavy black outlines, no comic book style, no harsh borders. The mood should be thoughtful, "
+        "inspiring, and premium, not cartoonish and not fantasy. Use a sophisticated, harmonious color palette of deep navy blue, "
+        "warm sand ivory, soft forest green, muted charcoal grey, and restrained gold accents. "
         "Absolutely no text, no words, no alphabet letters, no numbers, no logos, and no watermark visible anywhere. "
         "The image must communicate only through symbolic, clean visual concepts. "
     )
 
-    # 35組針對每個分段精心設計的「故事性/隱喻性」視覺概念
-    concepts = [
-        (
-            "開場：撕開PM的「技術焦慮」與依賴循環",
-            "A professional product manager sitting at a desk surrounded by abstract locks, with lines connecting to glowing servers and floating code blocks in the background."
-        ),
-        (
-            "PM看不懂代碼陷入的依賴循環",
-            "A person standing in front of giant interlocking gear wheels that are tangled with lines of code, waiting for a developer to turn them."
-        ),
-        (
-            "等上兩天或更久的無奈",
-            "A classic hourglass on a wooden desk, sand flowing slowly, with shadows of calendars and clock faces on the wall."
-        ),
-        (
-            "對話式與代理式 AI 的區別",
-            "A split concept illustration. Left: a simple chat bubble icon. Right: autonomous glowing AI agent birds flying between files and blueprint drawings."
-        ),
-        (
-            "AI 可以直接讀寫項目文件，在硬碟上生成分析報告",
-            "An invisible hand composed of particles flipping pages and editing blueprints and code files on a desk."
-        ),
-        (
-            "直接讀寫 Jira、Slack、Figma 和數據庫",
-            "A shining tech tree where branches grow into icons representing project tracking, database, chat, and UI design."
-        ),
-        (
-            "非技術背景 PM 面對終端機退縮",
-            "A product manager looking at a large glowing green matrix terminal screen on a dark wall, showing minor hesitation."
-        ),
-        (
-            "終端中按 Shift+Tab AI 生成文檔",
-            "A finger pressing a key on a glowing computer keyboard, causing clean documents and PDF files to float up from the screen."
-        ),
-        (
-            "調查功能「What data does feature access?」",
-            "A large glowing magnifying glass magnifying rows of tables and data flow streams inside a database cylinder."
-        ),
-        (
-            "四大模式覆蓋了 PM 調查功能的絕大多數場景",
-            "A compass pointing to four distinct glowing quadrants on a map, symbolizing four investigation scenarios."
-        ),
-        (
-            "安全漏洞分析與性能瓶頸",
-            "A complex glowing circuit maze with red warning dots at key intersections, being analyzed by a probe of light."
-        ),
-        (
-            "不僅是技術問題，更是團隊協作的藝術",
-            "A puzzle where a hand of a PM and a hand of a developer fit the final glowing piece together."
-        ),
-        (
-            "步驟 4：形成可測試的假設",
-            "A balancing scale, balancing a glowing lightbulb idea on one side and a scientific flask and ruler on the other."
-        ),
-        (
-            "利用 Claude Code 進行競品與市場分析",
-            "A person looking through binoculars from a peak toward digital mountains, paper planes with charts flying in the sky."
-        ),
-        (
-            "Claude Code 可以存取網路，自己搜索最新資料",
-            "Shining virtual swallows flying through cloud networks, gathering glowing golden fibers and bringing them to a notebook."
-        ),
-        (
-            "強在能幫您結構化您的方法論，並讓假設顯性化",
-            "A 3D transparent geometric grid structure where nested assumptions and boxes are organized perfectly."
-        ),
-        (
-            "呈現給高管層的市場估算報告",
-            "A sunlit meeting room white-board showing a golden arrow curve shooting straight upward."
-        ),
-        (
-            "昨天有一個 VIP 客戶在大發雷霆要求功能",
-            "A bolt of lightning striking a server rack and user feedback cards, creating pressure and urgency."
-        ),
-        (
-            "反饋工單中往往帶有客戶的隱私資料",
-            "A digital folder locked by a glowing security lock, protecting personal text cards inside."
-        ),
-        (
-            "提示詞跑步機（Prompt Treadmill）",
-            "A person running on a glowing treadmill, chasing a carrot shaped like a perfect prompt word hanging in front."
-        ),
-        (
-            "包含名稱和用來觸發 AI 的技能描述",
-            "An open ancient scroll filled with modern API code scripts and functional configurations."
-        ),
-        (
-            "5 大實用工具（反饋綜合器、競品掃描器等）",
-            "A wooden toolbox opened, revealing five distinct glowing tech tools, each emitting a different colored light."
-        ),
-        (
-            "是否有未說明的待辦項目？",
-            "A check list with almost all items checked, with one last unchecked item glowing softly in the dark."
-        ),
-        (
-            "這對 PM 的工作效率意味著效率大躍升",
-            "A glowing mechanical bird soaring high, carrying a PM silhouette above mountains of paperwork."
-        ),
-        (
-            "分析研發留言，找出未解決的技術依賴",
-            "A beam of searchlight illuminating a network of developer comments, highlighting a red warning chain icon."
-        ),
-        (
-            "PM在使用數據庫 MCP 拉取指標時必須連接到唯讀從庫",
-            "A faucet with blue water of binary codes connected to a safe, read-only water tower next to a main server."
-        ),
-        (
-            "PM什麼時候需要派生子代理？這會帶來成本負擔嗎？",
-            "A main bubble splitting into smaller sub-agents, with floating dollar sign shadows below them."
-        ),
-        (
-            "子代理模式中主代理扮演協調者",
-            "An orchestral conductor leading several musicians with different instruments, guiding them into harmony."
-        ),
-        (
-            "每個子代理都要重新讀取基礎文件並載入環境",
-            "Multiple scholars studying the same massive book on a table, with sandglasses symbolizing redundant tasks."
-        ),
-        (
-            "底線：PM絕對不要用 Claude Code 去修改生產代碼庫！",
-            "A thick red laser line blocking access to a glowing, complex central system core representing production codebase."
-        ),
-        (
-            "引導文件變成了團隊唯一的真實來源，兩邊對接",
-            "A bridge connecting two cliffs. On one side a PM, on the other an engineer. An open, glowing manual floats at the center."
-        ),
-        (
-            "AI 擅長處理具體、覆蓋面小的局部任務",
-            "A microscope zooming in on a tiny silicon chip, performing detailed soldering in a microscopic view."
-        ),
-        (
-            "AI會開始變得丟三落四、反覆給出已被否定的建議",
-            "A confused robot holding its head, surrounded by scattered notes and canceled sketches."
-        ),
-        (
-            "剛學會寫技能就寫了極其複雜的年度審查技能",
-            "A person using a giant complex steam-punk machine to prune a tiny daisy flower, representing over-engineering."
-        ),
-        (
-            "謝謝 Robin，也謝謝大家的收聽！",
-            "A warm study desk at night, illuminated by a reading lamp, with the book and a steaming cup of tea on it."
-        )
-    ]
+    if book_id == "147":
+        concepts = [
+            ("開場：財務痛點提問", "Emily holding a microphone in front of a modern city library, welcoming the audience. Soft watercolor."),
+            ("鉤子與金錢現狀", "A person looking at a small empty wallet with a sad expression, while a golden path of keys floats in the sky."),
+            ("哈維·艾克的嚴厲警告", "A teacher at a blackboard drawing a big question mark, indicating 'Don't believe a word'."),
+            ("第一章：金錢的因果規律", "A beautiful watercolor oak tree with glowing roots underground and small apples above ground, highlighting 'invisible roots create visible fruits'."),
+            ("實現程序公式 P-T-F-A-R", "A circular flowchart of glowing letters: P -> T -> F -> A = R, with light washes of ivory and navy."),
+            ("制約管道一：語言設定", "A child listening to dark, heavy speech bubbles filled with warning signs, representing negative money words."),
+            ("制約管道二：模仿", "A child watching parents argue over a broken piggy bank, reflecting modeling behavior."),
+            ("制約管道三：特殊事件", "A dramatic event: a table with tea spilled, showing childhood financial trauma."),
+            ("第二章：察覺與理解", "A person writing in a journal under a warm desk lamp, gaining self-awareness."),
+            ("離析與宣告", "A person standing on a mountain peak, hand on chest, declaring new beliefs to the wind."),
+            ("檔案1-我創造我的人生", "A pilot firmly holding the steering wheel of a small plane flying above the clouds."),
+            ("受害者特徵與抱怨的代價", "A person pointing fingers at others in a stormy sea, wearing a victim tag."),
+            ("檔案2-玩金錢遊戲是為了贏", "An archer aiming a bow at the bullseye of a target, pulling the arrow to win."),
+            ("檔案3-致力於變得富有", "A warrior climbing a steep cliff in a storm, showing absolute commitment."),
+            ("想要的三個層次", "A scholar writing 'I commit' on parchment with a gold quill."),
+            ("檔案4-想得很大", "A captain of a giant container ship sailing into the open ocean towards a horizon of light."),
+            ("檔案5-專注於機會與走廊理論", "A traveler walking towards a newly opened doorway glowing with soft green light, ignoring a dark wall."),
+            ("踏上走廊實踐案例", "A person washing coffee cups in the back of a bustling cafe, looking through the door to the manager's office."),
+            ("檔案6-欣賞有錢人", "A person clapping and smiling at a beautiful villa on a hill, showing genuine admiration and blessing."),
+            ("檔案7-與成功人士交往", "A group of professionals sitting around a wooden table in a high-end club, discussing ideas."),
+            ("檔案8-宣傳自我價值", "A presenter standing confidently on a stage, showcasing a glowing golden sphere of value."),
+            ("檔案9-大於你的問題", "A giant standing tall, looking down at a small mountain peak, representing stepping over obstacles."),
+            ("檔案10-是很棒的接受者", "A person opening their arms to catch falling stardust and golden raindrops from the night sky."),
+            ("給予與接受的平衡", "A scale in perfect balance, with a heart on one side and a glowing coin on the other."),
+            ("檔案11-根據結果拿酬勞", "A consultant shaking hands with a client, with a scoreboard in the background showing performance metrics."),
+            ("時間與限制的代價", "An hourglass running out of sand, illustrating the limit of paying by time."),
+            ("檔案12-兩個都要", "A scale holding both a stack of gold coins and a happy, healthy family portrait."),
+            ("專注於淨值", "A scale balancing all assets (gold, houses, stocks) against liabilities, showing net worth."),
+            ("淨值四要素一與二", "A person putting a gold coin into a clean piggy bank next to growing green plants."),
+            ("淨值四要素三與四", "A simple cottage with a small vegetable garden, representing simple living, next to a growing chart."),
+            ("檔案14-管理金錢", "Six glass jars on a table, each with a different colored ribbon and glowing contents."),
+            ("理財分流六個帳戶系統", "A hand dividing gold coins into FFA (10%), Play (10%), etc."),
+            ("檔案15-讓錢辛苦工作", "A tiny gold coin planted in soil, growing into a tree that produces more gold coins."),
+            ("被動收入的自動運作", "A beautiful windmill turning on a green hill, producing power automatically."),
+            ("檔案16-恐懼中採取行動", "A climber stepping off a ledge into the air, connected by a secure golden rope, face showing focus."),
+            ("舒適區等於財富區", "A circular outline representing comfort zone expanding outwards to include new territory."),
+            ("檔案17-持續學習成長", "A pile of leather-bound books with a small green sprout growing from the top book."),
+            ("成為-去做-擁有", "A staircase with labels 'Be' at the bottom, 'Do' in the middle, and 'Have' at the top."),
+            ("現在該做什麼", "A person touching their forehead with a smile, in front of a warm golden sunrise, declaring success.")
+        ]
+    elif book_id == "148":
+        concepts = [
+            ("開場與小林醫生的焦慮", "An exhausted surgeon in scrubs leaning against a sterile hospital hallway wall, holding a glowing vintage hourglass. Soft watercolor style."),
+            ("財務自由與儲蓄的界限", "A person stacking gold coins inside a dark stone vault, while a giant dark shadow symbolizing inflation looms outside. Warm sand and navy watercolor washes."),
+            ("老闆錢包的起點：馬可維茲", "A classic brass scale balancing a colorful globe (representing VT) on one side and a stack of bonds (representing BNDW) on the other. Delicate watercolor wash."),
+            ("老闆錢包的兩大核心", "A merchant ship navigating a calm, deep navy sea guided by two lighthouses: one glowing warm green, the other soft blue. Poetic watercolor style."),
+            ("股債比例的選擇", "A person at a wooden desk holding a brass compass, pointing to a circular pie chart divided into 80% growth and 20% stability sectors."),
+            ("再平衡的魔法：低買高賣", "A vintage wooden balance scale being adjusted by a hand, automatically transferring glowing gold dust from the higher side to the lower side."),
+            ("再平衡的執行時機", "A vintage desk calendar with a specific date circled, next to a notebook showing a simple mathematical calculation with a gold pen."),
+            ("黑天鵝的降臨與系統漏洞", "A giant dark wave rising behind a calm coastal town under a stormy purple sky, with a small sailboat securing its anchor. Dramatic watercolor wash."),
+            ("防禦性槓鈴策略", "A barbell held by a hand: one giant heavy sphere represents 90% safe assets, and a tiny glowing gold sphere represents 10% high-reward risk assets."),
+            ("四層防禦網的概念", "A medieval stone fortress with four concentric circular walls surrounding a glowing treasure chest, protected from a distant lightning storm."),
+            ("第一與第二層防線：緊急金與保險", "A warm, cozy living room with a glowing fireplace, protected from a heavy rainstorm outside by a giant golden shield overhead."),
+            ("第三與第四層防線：生活債券與老闆錢包", "A stone bridge supported by strong arches connecting a personal house to a vibrant marketplace, symbolizing stability and growth."),
+            ("時間分散與生命週期配置", "A winding mountain road: a young traveler with a backpack walks towards a bright sunrise, while an elderly traveler rests in a sunlit garden."),
+            ("年輕人的成長包配置", "A young green seedling sprouting vigorously from rich soil, bathed in warm sand-colored sunbeams. Clean, symbolic watercolor."),
+            ("開槓桿與年齡的智慧", "A mechanical gear system multiplying a small force into a larger motion, with a glowing symbol of '30% leverage' on a parchment paper."),
+            ("退休族的價值包配置", "A mature orchard in autumn, trees laden with ripe red apples, representing harvest, security, and stability. Soft forest green and gold accents."),
+            ("資產輪動的必要性", "A circular track where a runner in a navy uniform passes a glowing baton to a runner in a gold uniform, under a peaceful sky."),
+            ("密西西比泡沫的教訓", "An 18th-century French marketplace where merchants trade paper bank notes for barren land plots, while gold coins are hidden away in dark chests."),
+            ("法幣與實物資產的對比", "A hand holding a paper bank note dissolving into ashes in the wind, while the other hand holds a solid gold coin glowing with light."),
+            ("黃金作為防禦性資產", "A solid, shining gold bar acting as a shield, blocking a lightning bolt from a dark storm cloud. Poetic watercolor wash."),
+            ("道瓊/黃金比值 (Dow/Gold Ratio)", "A vintage balance scale with a factory gear (stocks) on one side and a gold ingot (gold) on the other, showing their ratio. Navy and gold accents."),
+            ("小金庫輪動策略", "A clean concept drawing with gold and navy arrows showing the mechanical flow of buying gold when stocks are expensive, and vice versa."),
+            ("比值大於20的避險操作", "A red warning lantern glowing next to a bubble bath, with a hand moving gold ingots into a secure vault. Faint pencil sketch outlines."),
+            ("比值小於5的抄底操作", "A green lantern glowing next to a fertile plowed field, with a hand planting glowing seeds (stocks). Soft green and warm sand washes."),
+            ("歷史實證：穿越百年的策略", "A timeline chart showing historical years 1929 and 2000, with a gold curve climbing steadily while a red stock curve drops and recovers."),
+            ("總結：永不崩盤的財富金字塔", "A majestic golden pyramid standing stable in a vast desert under a clear blue sky, glowing in the warm sunrise. Premium watercolor wash.")
+        ]
+    else:
+        # B146 concepts (fallback)
+        concepts = [
+            ("第一章 開場：走向價值投資之路", "A thoughtful traveler standing at a fork in a mountain road, one path covered in sharp dark thorns representing chaotic stock trading, the other path paved with glowing golden bricks leading to a beautiful sunrise symbolizing financial freedom."),
+            ("第一章 評估公司與思考市場", "A split concept illustration. On the left side, a hand uses a vintage magnifying glass to inspect a gold-plated machine. On the right side, a stormy, emotional sea represents the volatile market."),
+            ("第一章 六步驟價值投資SOP架構", "A circular diagram representing six stepping stones crossing a calm blue river, with a glowing temple on the far bank, illustrating a systematic investment process."),
+            ("第二章 三大財務指標防線", "Three sturdy shields standing on a stone platform, labeled with gold engravings, protecting a chest of gold coins from heavy rain, symbolizing ROE, Free Cash Flow, and Earnings Quality."),
+            ("第二章 ROE 的動態過濾網", "A massive funnel filtering out dark stones, leaving only shining golden gemstones representing companies with high ROE."),
+            ("第二章 每股自由現金流防禦", "A golden umbrella shielding a growing green plant from a heavy downpour of financial red graphs, representing cash flow protection."),
+            ("第二章 董監持股與誠信門檻", "A captain at the ship's wheel looking forward, holding hands with the passengers, showing shared destination and trust."),
+            ("第二章 獲利能力矩陣：A級企業", "A pristine, golden cash-printing machine in a bright library, printing bills smoothly, representing an A-grade cash generator."),
+            ("第二章 獲利能力矩陣：B一級高成長股", "A growing rocket booster being built in a high-tech workshop, surrounded by pipes and equipment, waiting for fuel, representing high-growth stocks."),
+            ("第二章 獲利能力矩陣：B二級與C級淘汰", "A mature windmill turning slowly in a quiet meadow representing B2-grade stocks, while a broken, dark coal factory stands abandoned in the distance representing C-grade stocks."),
+            ("第三章 資產負債表安全防線", "A strong, ancient stone castle wall standing tall against high tidal waves, protecting a peaceful town."),
+            ("第三章 好債：無息貸款與談判籌碼", "A merchant receiving goods from suppliers with friendly handshakes, showing trust and bargaining power."),
+            ("第三章 壞債的利息重擔", "A person climbing a mountain carrying a heavy iron ball labeled with bank debt, showing financial leverage load."),
+            ("第三章 股東權益與淨值含金量", "A treasure chest where the main storage is a deep golden lake of accumulated wealth, representing retained earnings."),
+            ("第三章 損益表與長期增長力道", "A merchant ship sailing with full sails on a golden sea, loaded with boxes of cargo, showing quantity and price growth."),
+            ("第三章 十二月滾動營收年增率", "A navigator looking through a brass telescope, spotting a green lighthouse through the morning fog, predicting business turnaround."),
+            ("第三章 雙率走勢同步向上", "Two golden arrows climbing steadily together on a grid board, moving upward towards the top right."),
+            ("第三章 預估EPS的三個版本", "A scholar comparing three drafting designs on a wooden table: a conservative plan, a realistic plan, and a balanced plan."),
+            ("第四章 閱讀年報與波特五力", "A scholar in a quiet library reading a massive leather-bound book, with five winds blowing against a candle, but the flame remains steady."),
+            ("第四章 成本策略：規模與通路優勢", "A vast network of ships and roads carrying cargo across a map, showing deep logistical dominance."),
+            ("第四章 差異化：技術與轉移成本", "A lock and key made of glowing golden code, holding a glowing database, showing high customer switching barrier."),
+            ("第五章 本益比與盈餘殖利率", "A scale balancing a pile of gold coins against a simple price tag, indicating opportunity cost comparison."),
+            ("第五章 高登公式的總報酬率", "A glowing glass orb filled with growing green vines and dripping gold coins, representing the compounding force of growth and yield."),
+            ("第五章 本益比對應合理高價", "A graph showing three colored zones: a green low-price safety zone, a yellow fair zone, and a red hot zone."),
+            ("第五章 安全邊際打折與過熱警訊", "A shield blocking falling arrows, while a warning red light glows at the top of a stone tower."),
+            ("第五章 彼得林區評價法", "A researcher using a magnifier to look at a small sprout growing rapidly, outperforming nearby dry weeds."),
+            ("第五章 巴費特指標與宏觀配置", "A captain adjusting the sails of a ship, keeping cash reserves high when the sea is stormy, and deploying nets when it is calm."),
+            ("第六章 雷式GTD投資工作流", "A clean desk with a leather-bound folder, showing files organized neatly into distinct compartments: Inbox, Study, Watchlist, Portfolio.")
+        ]
 
-    # 安全檢查：若分段數與我們的設計不符，發出警告並使用線性插值 fallback
+    # 安全檢查
     if len(concepts) != total_segments:
         print(f"Warning: concepts list size ({len(concepts)}) does not match total_segments ({total_segments}). Using interpolation fallback.")
         use_direct_mapping = False
@@ -229,7 +199,6 @@ def generate_csv():
                 concept_idx = min(int(seg_id * len(concepts) / total_segments), len(concepts) - 1)
                 concept_title, concept_desc = concepts[concept_idx]
             
-            # 生成序號（從 00 開始）
             seq_num = f"{seg_id:02d}"
             full_prompt = base_prompt + f"The central focus of this specific image is: {concept_desc}"
             numbered_prompt = f"{seq_num}. {full_prompt}"

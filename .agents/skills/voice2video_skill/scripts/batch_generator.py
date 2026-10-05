@@ -4,6 +4,20 @@ import time
 import glob
 import json
 import argparse
+import functools
+
+print = functools.partial(print, flush=True)
+
+# Ensure workspace site-packages is on sys.path
+_curr = os.path.dirname(os.path.abspath(__file__))
+while _curr and _curr != "/":
+    _sp = os.path.join(_curr, "site-packages")
+    if os.path.exists(_sp):
+        if _sp not in sys.path:
+            sys.path.insert(0, _sp)
+        break
+    _curr = os.path.dirname(_curr)
+
 from playwright.sync_api import sync_playwright
 
 def parse_args():
@@ -16,16 +30,23 @@ def parse_args():
     parser.add_argument("--target-url", default="https://new.express.adobe.com/home/tools/animate-from-audio", help="Adobe Express tool URL")
     return parser.parse_args()
 
-def process_single_file(mp3_path, output_mp4_path, character_name, session_path, target_url):
+def process_single_file(mp3_path, output_mp4_path, character_name, session_path, target_url, is_silent=False):
     print(f"=== 開始處理音檔: {os.path.basename(mp3_path)} (使用角色: {character_name}) ===")
     
-    # 若為轉場/標頭靜音檔 (< 5KB)，Adobe Express 無法識別無語音檔，直接以 ffmpeg 生成純綠幕影片
-    if os.path.getsize(mp3_path) < 5000:
+    # 若為轉場/標頭靜音檔 (< 5KB 或標記為靜音)，Adobe Express 無法識別無語音檔，直接以 ffmpeg 生成純綠幕影片
+    if is_silent or os.path.getsize(mp3_path) < 5000:
         print(f"  -> 轉場/標頭靜音檔 ({os.path.basename(mp3_path)})，直接以 ffmpeg 生成純綠幕影片...")
         import subprocess
         try:
+            ffmpeg_bin = shutil.which("ffmpeg")
+            if not ffmpeg_bin:
+                try:
+                    import imageio_ffmpeg
+                    ffmpeg_bin = imageio_ffmpeg.get_ffmpeg_exe()
+                except Exception:
+                    ffmpeg_bin = "ffmpeg"
             cmd = [
-                "ffmpeg", "-y",
+                ffmpeg_bin, "-y",
                 "-f", "lavfi", "-i", "color=c=0x27BB36:s=1280x720:r=30",
                 "-i", mp3_path,
                 "-c:v", "libx264", "-c:a", "aac", "-shortest",
@@ -443,6 +464,7 @@ def main():
         
     # Load CSV mapping (Filename -> Speaker/Voice ID)
     voice_mapping = {}
+    silent_files = set()
     if os.path.exists(args.csv_path):
         print(f"載入發音人清單: {args.csv_path}")
         with open(args.csv_path, mode="r", encoding="utf-8-sig") as f:
@@ -450,6 +472,10 @@ def main():
             for row in reader:
                 filename = row.get("檔名", "").strip()
                 tts_voice = row.get("TTS語音", "").strip()
+                tag = row.get("角色標記", "").strip()
+                text = row.get("文字內容", "").strip()
+                if "@@@@" in tag or text.startswith("@@@@"):
+                    silent_files.add(filename)
                 if not tts_voice:
                     # Fallback to check other column names just in case
                     tts_voice = row.get("發音人", "").strip() or row.get("角色標記", "").strip()
@@ -457,7 +483,7 @@ def main():
                     # Map the file to the corresponding character based on the speaker mapping
                     character = char_mapping.get(tts_voice, "Sticky")
                     voice_mapping[filename] = character
-        print(f"成功對照 {len(voice_mapping)} 個音檔之發音角色。")
+        print(f"成功對照 {len(voice_mapping)} 個音檔之發音角色 (含 {len(silent_files)} 個轉場靜音檔)。")
     else:
         print(f"警告：找不到發音人清單 {args.csv_path}，將全部預設為 Sticky 角色。")
         
@@ -484,6 +510,7 @@ def main():
         
         # Get dynamic character name
         character_name = voice_mapping.get(filename, "Sticky")
+        is_silent = (filename in silent_files)
         
         print(f"[{idx}/{total_files}] 處理檔案: {filename} (配角: {character_name})")
         
@@ -505,7 +532,8 @@ def main():
                 output_mp4, 
                 character_name,
                 args.session_path,
-                args.target_url
+                args.target_url,
+                is_silent=is_silent
             )
             if success:
                 break

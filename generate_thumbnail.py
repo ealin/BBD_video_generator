@@ -1,4 +1,10 @@
 import os
+import sys
+
+_site_packages = os.path.join(os.path.dirname(os.path.abspath(__file__)), "site-packages")
+if os.path.exists(_site_packages) and _site_packages not in sys.path:
+    sys.path.insert(0, _site_packages)
+
 from PIL import Image, ImageDraw, ImageFont, ImageEnhance
 
 def find_book_dir(book_id):
@@ -7,12 +13,23 @@ def find_book_dir(book_id):
             return item
     raise FileNotFoundError(f"Cannot find book directory starting with {book_id}_")
 
-def create_thumbnail():
+def create_thumbnail(book_id=None, bg_path=None, output_path=None):
     # 檔案路徑設定
-    book_id = "144"
+    import sys
+    if book_id is None:
+        book_id = sys.argv[1] if len(sys.argv) > 1 else "146"
     book_dir = find_book_dir(book_id)
     info_path = os.path.join(book_dir, "raw", "info.txt")
-    bg_path = os.path.join(book_dir, "photo", "縮圖背景.png")
+    if bg_path is None:
+        if len(sys.argv) > 2:
+            bg_path = sys.argv[2]
+        else:
+            bg_path = os.path.join(book_dir, "photo", "縮圖背景.png")
+    if output_path is None:
+        if len(sys.argv) > 3:
+            output_path = sys.argv[3]
+        else:
+            output_path = os.path.join(book_dir, "photo", "youtube_thumbnail.png")
     
     # 支援中英文及多種副檔名封面偵測
     book_paths = [
@@ -29,7 +46,6 @@ def create_thumbnail():
             book_path = bp
             break
     
-    output_path = os.path.join(book_dir, "photo", "youtube_thumbnail.png")
     font_path = "TaipeiSansTCBeta-Bold.ttf"
     
     # 預設標題與副標題
@@ -62,6 +78,11 @@ def create_thumbnail():
                         if len(parts) == 1:
                             parts = line.split(":", 1)
                         if len(parts) == 2:
+                            main_title = parts[1].strip()
+                    elif "/" in line:
+                        parts = line.split("/")
+                        if len(parts) >= 2:
+                            sub_title = parts[0].strip()
                             main_title = parts[1].strip()
             print(f"解析成功：副標題=[{sub_title}], 主標題=[{main_title}]")
         except Exception as e:
@@ -132,6 +153,12 @@ def create_thumbnail():
                 break
             sub_size -= 4
 
+        # 根據使用者需求，兩行字體大小皆額外再增加 10 點 (總共 +20 點)
+        main_size += 20
+        sub_size += 20
+        font_main = ImageFont.truetype(font_path, main_size)
+        font_sub = ImageFont.truetype(font_path, sub_size)
+
     main_bbox = temp_draw.textbbox((0, 0), main_title, font=font_main)
     main_h = main_bbox[3] - main_bbox[1]
     
@@ -172,14 +199,37 @@ def create_thumbnail():
     draw = ImageDraw.Draw(canvas)
     
     # 繪製副標題 (白色字體 + 黑色粗邊框 + 陰影效果)
+    # 支援逗號換行：若副標題含有全形逗號，則在逗號後拆成兩行
     shadow_offset = 6
     stroke_width = 8
     
-    # 陰影
-    draw.text((left_margin + shadow_offset, sub_y + shadow_offset), sub_title, font=font_sub, fill=(0,0,0,180))
-    # 文字本體與邊框
-    draw.text((left_margin, sub_y), sub_title, font=font_sub, fill=(255, 255, 255, 255), 
-              stroke_width=stroke_width, stroke_fill=(0, 0, 0, 255))
+    if "，" in sub_title:
+        sub_lines = sub_title.split("，", 1)
+        sub_lines[0] = sub_lines[0] + "，"  # 逗號留在第一行尾
+        # 計算兩行的高度
+        sub_line1_bbox = temp_draw.textbbox((0, 0), sub_lines[0], font=font_sub)
+        sub_line1_h = sub_line1_bbox[3] - sub_line1_bbox[1]
+        sub_line2_bbox = temp_draw.textbbox((0, 0), sub_lines[1], font=font_sub)
+        sub_line2_h = sub_line2_bbox[3] - sub_line2_bbox[1]
+        line_gap = 10
+        total_sub_h = sub_line1_h + line_gap + sub_line2_h
+        # 將副標題整體上移：從主標題上方留出足夠空間
+        sub_y2 = main_y - sub_line2_h - 30  # 第二行位置
+        sub_y1 = sub_y2 - sub_line1_h - line_gap  # 第一行位置
+        # 繪製第一行
+        draw.text((left_margin + shadow_offset, sub_y1 + shadow_offset), sub_lines[0], font=font_sub, fill=(0,0,0,180))
+        draw.text((left_margin, sub_y1), sub_lines[0], font=font_sub, fill=(255, 255, 255, 255), 
+                  stroke_width=stroke_width, stroke_fill=(0, 0, 0, 255))
+        # 繪製第二行
+        draw.text((left_margin + shadow_offset, sub_y2 + shadow_offset), sub_lines[1], font=font_sub, fill=(0,0,0,180))
+        draw.text((left_margin, sub_y2), sub_lines[1], font=font_sub, fill=(255, 255, 255, 255), 
+                  stroke_width=stroke_width, stroke_fill=(0, 0, 0, 255))
+    else:
+        # 陰影
+        draw.text((left_margin + shadow_offset, sub_y + shadow_offset), sub_title, font=font_sub, fill=(0,0,0,180))
+        # 文字本體與邊框
+        draw.text((left_margin, sub_y), sub_title, font=font_sub, fill=(255, 255, 255, 255), 
+                  stroke_width=stroke_width, stroke_fill=(0, 0, 0, 255))
               
     # 繪製主標題 (亮黃色字體 + 黑色粗邊框 + 陰影效果)
     shadow_offset_main = 10

@@ -24,11 +24,19 @@ import time
 import re
 import argparse
 import shutil
+import functools
+
+print = functools.partial(print, flush=True)
+
+# Ensure workspace site-packages is on sys.path
+_site_packages = os.path.join(os.path.dirname(os.path.abspath(__file__)), "site-packages")
+if os.path.exists(_site_packages) and _site_packages not in sys.path:
+    sys.path.insert(0, _site_packages)
 import requests
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
 
 # ============ 設定區 ============
-BOOK_ID = "144"
+DEFAULT_BOOK_ID = "146"
 
 def find_book_dir(book_id):
     for item in os.listdir('.'):
@@ -36,10 +44,9 @@ def find_book_dir(book_id):
             return item
     raise FileNotFoundError(f"Cannot find book directory starting with {book_id}_")
 
-book_dir = find_book_dir(BOOK_ID)
-CSV_PATH = os.path.join(book_dir, "raw", "分段生圖腳本.csv")
-OUTPUT_DIR = os.path.join(book_dir, "photo", f"bg{BOOK_ID}")
 CHATGPT_URL = "https://chatgpt.com"
+GEMINI_URL = "https://gemini.google.com"
+META_AI_URL = "https://www.meta.ai"
 # Chrome user data — 用以繼承登入狀態
 CHROME_USER_DATA = os.path.expanduser("~/Library/Application Support/Google/Chrome")
 # Playwright 會複製一份到暫存目錄，避免鎖衝突
@@ -58,16 +65,18 @@ def read_prompts(csv_path: str) -> list[dict]:
     with open(csv_path, "r", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
         for row in reader:
-            raw_prompt = row["生圖 Prompt"]
+            raw_prompt = row.get("生圖 Prompt", row.get("prompt", row.get("Prompt", "")))
+            if not raw_prompt:
+                continue
             # 僅提取序號作為 seg_id，不刪除 Prompt 開頭的序號！
             match = re.match(r"^(\d+)\.\s*", raw_prompt)
             if match:
                 seg_id = int(match.group(1))
             else:
-                seg_id = len(prompts)
+                seg_id = int(row["id"]) if "id" in row and str(row["id"]).isdigit() else len(prompts)
             prompts.append({
                 "seg_id": seg_id,
-                "concept": row.get("插圖設計概念", ""),
+                "concept": row.get("插圖設計概念", row.get("name", "")),
                 "prompt": raw_prompt, # 保留完整 Prompt（包含開頭序號，使 ChatGPT 能辨識為不同圖片）
             })
     return prompts
@@ -98,7 +107,10 @@ def setup_browser(pw, engine="chatgpt"):
 
 def wait_for_login(page, timeout=300, engine="chatgpt"):
     """等待使用者完成登入。"""
-    print(f"\n🔐 請在瀏覽器中登入 {engine.upper()}（使用 Google 帳號 ealin.chiu@gmail.com）")
+    if engine == "meta_ai":
+        print(f"\n🔐 請在瀏覽器中登入 {engine.upper()}（可使用 Facebook / Instagram / Meta 帳號）")
+    else:
+        print(f"\n🔐 請在瀏覽器中登入 {engine.upper()}（使用 Google 帳號 ealin.chiu@gmail.com）")
     print(f"   ⏳ 等待登入完成（最多 {timeout} 秒）...\n")
     
     try:
@@ -108,9 +120,14 @@ def wait_for_login(page, timeout=300, engine="chatgpt"):
                 'div[id="composer-background"], textarea[id="prompt-textarea"], div[contenteditable="true"]',
                 timeout=timeout * 1000
             )
-        else: # gemini
+        elif engine == "gemini":
             page.wait_for_selector(
                 'div[role="textbox"], div[contenteditable="true"], textarea',
+                timeout=timeout * 1000
+            )
+        else: # meta_ai
+            page.wait_for_selector(
+                '[data-testid="composer-input"], textarea[placeholder*="萬事問"], input[aria-label="Ask Meta AI"], input[placeholder*="Ask Meta AI"], textarea[placeholder*="Ask Meta AI"], div[role="textbox"], div[contenteditable="true"], textarea',
                 timeout=timeout * 1000
             )
         print(f"✅ 登入成功！偵測到 {engine.upper()} 聊天介面。")
@@ -140,6 +157,14 @@ def close_modals_if_any(page):
         'button:has-text("Next")',
         'button:has-text("下一步")',
         'button[aria-label="Close"]',
+        'button[aria-label="Dismiss"]',
+        'button[aria-label*="Dismiss" i]',
+        'button:has-text("Not now")',
+        'button:has-text("稍後再說")',
+        'button:has-text("Allow all cookies")',
+        'button:has-text("Decline optional cookies")',
+        'button:has-text("接受所有 Cookie")',
+        'button:has-text("拒絕選用 Cookie")',
         'div[role="dialog"] button:has-text("Okay")',
         'div[role="dialog"] button:has-text("Got it")',
     ]
@@ -172,14 +197,14 @@ def is_image_avatar(img, src: str, cls: str, alt: str) -> bool:
         if "drawings/" not in src and "rts/" not in src:
             return True
             
-    # ChatGPT 與 Gemini 助理頭像 / 圖標
+    # ChatGPT 與 Gemini 與 Meta AI 助理頭像 / 圖標
     if "spark" in src_l or "spark" in cls_l or "sparkle" in cls_l:
         return True
         
     if "rounded-full" in cls or "h-6" in cls or "w-6" in cls:
         return True
         
-    if any(k in alt for k in ["設定檔圖像", "帳戶", "Google Account", "Profile Picture", "Gemini", "ChatGPT"]):
+    if any(k in alt for k in ["設定檔圖像", "帳戶", "Google Account", "Profile Picture", "Gemini", "ChatGPT", "Meta AI", "Meta"]):
         return True
         
     # 2. 尺寸大小判定 (頭像與小圖標通常小於 150 像素)
@@ -232,12 +257,22 @@ def send_prompt_and_download(page, prompt: str, seg_id: int, output_dir: str, en
                 'img[src*="backend-api/estuary"]',
                 'img[src^="blob:"]',
             ]
-        else: # gemini
+        elif engine == "gemini":
             img_selectors = [
                 'div.model-response img',
                 'message-content img',
                 'img[src*="googleusercontent.com"]',
                 'img[src*="google"]',
+            ]
+        else: # meta_ai
+            img_selectors = [
+                'div[role="main"] img',
+                'div[role="feed"] img',
+                'img[src*="fbcdn.net"]',
+                'img[src*="fbsbx.com"]',
+                'img[alt*="Imagine" i]',
+                'img[src^="blob:"]',
+                'img',
             ]
 
         for selector in img_selectors:
@@ -253,10 +288,12 @@ def send_prompt_and_download(page, prompt: str, seg_id: int, output_dir: str, en
                 if existing_imgs:
                     break
         initial_image_count = len(existing_imgs)
+        initial_srcs = {img.get_attribute("src") for img in existing_imgs if img.get_attribute("src")}
         print(f"  🔍 送出前偵測到 {initial_image_count} 張已存在的圖片。")
     except Exception as e_count:
         print(f"  ⚠️ 計算初始圖片數量時出錯 (預設為0): {e_count}")
         initial_image_count = 0
+        initial_srcs = set()
 
     try:
         # 1. 找到輸入框並填入 prompt
@@ -268,13 +305,27 @@ def send_prompt_and_download(page, prompt: str, seg_id: int, output_dir: str, en
                 'div[contenteditable="true"]',
                 '#prompt-textarea',
             ]
-        else: # gemini
+        elif engine == "gemini":
             selectors = [
                 'div.ql-editor',
                 'div[role="textbox"]',
                 'div[contenteditable="true"]',
                 'textarea',
                 'input-area div[contenteditable="true"]',
+            ]
+        else: # meta_ai
+            selectors = [
+                '[data-testid="composer-input"]',
+                'textarea[data-testid="composer-input"]',
+                'textarea[placeholder*="萬事問"]',
+                'input[aria-label="Ask Meta AI"]',
+                'input[placeholder*="Ask Meta AI"]',
+                'textarea[placeholder*="Ask Meta AI"]',
+                'div[aria-label*="Ask Meta AI"]',
+                'div[aria-label*="Message Meta AI"]',
+                'div[role="textbox"]',
+                'div[contenteditable="true"]',
+                'textarea',
             ]
 
         for selector in selectors:
@@ -290,15 +341,26 @@ def send_prompt_and_download(page, prompt: str, seg_id: int, output_dir: str, en
             print(f"  ❌ seg {seg_id:02d}: 找不到 {engine.upper()} 輸入框。")
             return False
 
+        # Meta AI 需以 "Imagine" 開頭觸發繪圖模型
+        input_text = prompt
+        if engine == "meta_ai" and not input_text.lower().startswith("imagine"):
+            input_text = f"Imagine {input_text}"
+
         # 清空並填入 prompt
         input_box.click()
         time.sleep(0.3)
         page.keyboard.press("Meta+A")
         page.keyboard.press("Backspace")
-        time.sleep(0.5)
+        time.sleep(0.3)
         
         # 輸入 prompt
-        input_box.fill(prompt)
+        try:
+            input_box.fill(input_text)
+            if engine == "meta_ai":
+                page.keyboard.press("Space")
+                page.keyboard.press("Backspace")
+        except Exception:
+            page.keyboard.insert_text(input_text)
         time.sleep(1)
         
         # 2. 點擊送出按鈕
@@ -311,13 +373,20 @@ def send_prompt_and_download(page, prompt: str, seg_id: int, output_dir: str, en
                 'button[data-testid="composer-send-button"]',
                 'form button[type="submit"]',
             ]
-        else: # gemini
+        elif engine == "gemini":
             send_selectors = [
                 'button[aria-label*="Send" i]',
                 'button[aria-label*="傳送" i]',
                 'button.send-button',
                 'button[aria-label="Send message"]',
                 'button[aria-label="傳送訊息"]',
+            ]
+        else: # meta_ai
+            send_selectors = [
+                'button[aria-label="Send"]',
+                'button[aria-label*="Send" i]',
+                'button[aria-label*="傳送" i]',
+                'button[type="submit"]',
             ]
 
         for selector in send_selectors:
@@ -329,11 +398,11 @@ def send_prompt_and_download(page, prompt: str, seg_id: int, output_dir: str, en
             except Exception:
                 continue
         
-        if send_btn:
+        if send_btn and not send_btn.is_disabled():
             print(f"  👉 點擊送出按鈕...")
             send_btn.click()
         else:
-            print(f"  👉 未找到送出按鈕，嘗試送出...")
+            print(f"  👉 未找到有效送出按鈕，嘗試按 Enter 送出...")
             input_box.focus()
             if engine == "gemini":
                 page.keyboard.press("Control+Enter")
@@ -367,12 +436,15 @@ def send_prompt_and_download(page, prompt: str, seg_id: int, output_dir: str, en
                 except Exception:
                     continue
             
-            # 關鍵判斷：當前找到的圖片數量必須大於初始數量，才代表新圖片已產生！
-            if len(images) > initial_image_count:
-                # 取最後一張圖（最新生成的）
+            # 關鍵判斷：尋找全新產生的圖片（src 不在 initial_srcs 中）
+            new_imgs = [img for img in images if (img.get_attribute("src") or "") and (img.get_attribute("src") or "") not in initial_srcs]
+            if new_imgs:
+                img_element = new_imgs[-1]
+                break
+            elif len(images) > initial_image_count:
                 last_img = images[-1]
-                src = last_img.get_attribute("src")
-                if src:
+                src = last_img.get_attribute("src") or ""
+                if src and src not in initial_srcs:
                     img_element = last_img
                     break
             
@@ -393,13 +465,14 @@ def send_prompt_and_download(page, prompt: str, seg_id: int, output_dir: str, en
                     images = []
                     for img in found_imgs:
                         src = img.get_attribute("src")
-                        if src and any(k in src for k in ["oaidalleapiprodscus", "files.oaiusercontent.com", "blob:", "backend-api/estuary", "estuary/content", "googleusercontent.com"]):
+                        if src and any(k in src for k in ["oaidalleapiprodscus", "files.oaiusercontent.com", "blob:", "backend-api/estuary", "estuary/content", "googleusercontent.com", "fbcdn.net", "fbsbx.com", "meta.com", "scontent"]):
                             cls = img.get_attribute("class") or ""
                             alt = img.get_attribute("alt") or ""
                             if not is_image_avatar(img, src, cls, alt):
                                 images.append(img)
-                    if len(images) > initial_image_count:
-                        img_element = images[-1]
+                    new_imgs = [img for img in images if (img.get_attribute("src") or "") and (img.get_attribute("src") or "") not in initial_srcs]
+                    if new_imgs:
+                        img_element = new_imgs[-1]
                         break
                 except Exception:
                     pass
@@ -417,42 +490,22 @@ def send_prompt_and_download(page, prompt: str, seg_id: int, output_dir: str, en
         
         # 4. 下載圖片
         
-        # 方式 0: 針對 blob: 網址，在網頁內直接將 Blob 讀入 Canvas 轉換成 DataURL 下載（極速、無失真高解析、避開 CSP 限制）
-        if src and src.startswith("blob:"):
+        # 方式 0: 在網頁 Context 中透過 fetch 直接提取圖片 Blob 並轉換成 DataURL 下載
+        # （極速、100% 精確對應當前圖片、不受多圖片對話中全局 DOM 下載按鈕錯亂影響）
+        if src:
             try:
-                print(f"  🧪 偵測到 blob: 網址，嘗試在網頁 Context 中進行 Canvas 轉換下載...")
+                print(f"  🧪 嘗試在網頁 Context 中直接提取圖片 DataURL...")
                 js_code = """
                 async (url) => {
-                    // 優先使用 Canvas 繪製以避免 CSP 阻擋 fetch
-                    try {
-                        return await new Promise((resolve, reject) => {
-                            const img = new Image();
-                            img.onload = () => {
-                                try {
-                                    const canvas = document.createElement("canvas");
-                                    canvas.width = img.naturalWidth;
-                                    canvas.height = img.naturalHeight;
-                                    const ctx = canvas.getContext("2d");
-                                    ctx.drawImage(img, 0, 0);
-                                    resolve(canvas.toDataURL("image/png"));
-                                } catch (err) {
-                                    reject(err);
-                                }
-                            };
-                            img.onerror = () => reject(new Error("Failed to load image on canvas"));
-                            img.src = url;
-                        });
-                    } catch (e) {
-                        // Fallback to fetch
-                        const resp = await fetch(url);
-                        const blob = await resp.blob();
-                        return new Promise((resolve, reject) => {
-                            const reader = new FileReader();
-                            reader.onloadend = () => resolve(reader.result);
-                            reader.onerror = reject;
-                            reader.readAsDataURL(blob);
-                        });
-                    }
+                    const resp = await fetch(url);
+                    if (!resp.ok) throw new Error("Fetch failed with status " + resp.status);
+                    const blob = await resp.blob();
+                    return new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onloadend = () => resolve(reader.result);
+                        reader.onerror = reject;
+                        reader.readAsDataURL(blob);
+                    });
                 }
                 """
                 data_url = page.evaluate(js_code, src)
@@ -461,22 +514,37 @@ def send_prompt_and_download(page, prompt: str, seg_id: int, output_dir: str, en
                     import base64
                     data = base64.b64decode(encoded)
                     
+                    is_webp = "webp" in header
                     ext = ".png"
                     if "jpeg" in header or "jpg" in header:
                         ext = ".jpg"
                     final_path = os.path.join(output_dir, f"{seg_id}{ext}")
                     
-                    with open(final_path, "wb") as f:
-                        f.write(data)
+                    if is_webp:
+                        temp_webp = os.path.join(output_dir, f"_temp_{seg_id}.webp")
+                        with open(temp_webp, "wb") as f:
+                            f.write(data)
+                        try:
+                            from PIL import Image
+                            with Image.open(temp_webp) as im:
+                                im.convert("RGB").save(final_path, "PNG")
+                            if os.path.exists(temp_webp):
+                                os.remove(temp_webp)
+                        except Exception:
+                            os.rename(temp_webp, final_path)
+                    else:
+                        with open(final_path, "wb") as f:
+                            f.write(data)
+                            
                     file_size = os.path.getsize(final_path)
-                    print(f"  ✅ seg {seg_id:02d}: Blob Canvas 轉換下載成功！({file_size/1024:.1f} KB) → {final_path}")
+                    print(f"  ✅ seg {seg_id:02d}: 網頁 Context 提取下載成功！({file_size/1024:.1f} KB) → {final_path}")
                     return True
             except Exception as e_blob:
-                print(f"  ⚠️ Blob 轉換下載失敗: {e_blob}")
+                print(f"  ⚠️ 網頁 Context 提取失敗: {e_blob}")
 
-        # 方式 1: 嘗試 hover 顯示下載按鈕並點擊下載
+        # 方式 1: 嘗試在該圖片所屬卡片容器內尋找專屬下載按鈕並點擊下載
         try:
-            print(f"  👉 嘗試 hover 圖片並點擊下載按鈕...")
+            print(f"  👉 嘗試尋找該圖片卡片的專屬下載按鈕...")
             img_element.hover()
             time.sleep(1)
             
@@ -489,7 +557,7 @@ def send_prompt_and_download(page, prompt: str, seg_id: int, output_dir: str, en
                     'button[aria-label*="下載"]',
                     'a[download]',
                 ]
-            else: # gemini
+            else: # gemini & meta_ai
                 btn_selectors = [
                     'button[aria-label*="Download" i]',
                     'button[aria-label*="下載" i]',
@@ -497,17 +565,39 @@ def send_prompt_and_download(page, prompt: str, seg_id: int, output_dir: str, en
                     'a[download]',
                 ]
                 
-            for btn_selector in btn_selectors:
+            # 優先向上搜尋該圖片所屬的父容器中的下載按鈕（最多向上 6 層，避免誤按頁面上其他圖片的下載按鈕）
+            curr = img_element
+            for _ in range(6):
+                if not curr:
+                    break
+                for btn_selector in btn_selectors:
+                    try:
+                        btn = curr.query_selector(btn_selector)
+                        if btn and btn.is_visible():
+                            download_btn = btn
+                            break
+                    except Exception:
+                        continue
+                if download_btn:
+                    break
                 try:
-                    btn = page.query_selector(btn_selector)
-                    if btn and btn.is_visible():
-                        download_btn = btn
-                        break
+                    curr = curr.evaluate_handle("el => el.parentElement").as_element()
                 except Exception:
-                    continue
+                    break
+
+            # 若容器內未找到且不是 meta_ai，才作為備用嘗試全局查詢
+            if not download_btn and engine != "meta_ai":
+                for btn_selector in btn_selectors:
+                    try:
+                        btn = page.query_selector(btn_selector)
+                        if btn and btn.is_visible():
+                            download_btn = btn
+                            break
+                    except Exception:
+                        continue
             
             if download_btn:
-                print(f"  👇 找到下載按鈕，觸發瀏覽器下載...")
+                print(f"  👇 找到專屬下載按鈕，觸發瀏覽器下載...")
                 with page.expect_download(timeout=15000) as download_info:
                     download_btn.click()
                 download = download_info.value
@@ -518,10 +608,24 @@ def send_prompt_and_download(page, prompt: str, seg_id: int, output_dir: str, en
                 final_path = os.path.join(output_dir, f"{seg_id}{ext}")
                 
                 download.save_as(final_path)
-                print(f"  ✅ seg {seg_id:02d}: 下載成功！→ {final_path}")
+                
+                if ext.lower() == ".webp":
+                    try:
+                        from PIL import Image
+                        png_path = os.path.join(output_dir, f"{seg_id}.png")
+                        with Image.open(final_path) as im:
+                            im.convert("RGB").save(png_path, "PNG")
+                        if os.path.exists(final_path) and final_path != png_path:
+                            os.remove(final_path)
+                        final_path = png_path
+                    except Exception:
+                        pass
+
+                file_size = os.path.getsize(final_path)
+                print(f"  ✅ seg {seg_id:02d}: 下載成功！({file_size/1024:.1f} KB) → {final_path}")
                 return True
         except Exception as e_click_dl:
-            print(f"  ⚠️  方式 1 (Hover點擊下載) 失敗: {e_click_dl}")
+            print(f"  ⚠️  方式 1 (專屬按鈕下載) 失敗: {e_click_dl}")
             
         # 方式 2: 點擊圖片打開預覽大圖，然後點擊預覽中的下載按鈕
         try:
@@ -557,6 +661,17 @@ def send_prompt_and_download(page, prompt: str, seg_id: int, output_dir: str, en
                 final_path = os.path.join(output_dir, f"{seg_id}{ext}")
                 
                 download.save_as(final_path)
+                if ext.lower() == ".webp":
+                    try:
+                        from PIL import Image
+                        png_path = os.path.join(output_dir, f"{seg_id}.png")
+                        with Image.open(final_path) as im:
+                            im.convert("RGB").save(png_path, "PNG")
+                        if os.path.exists(final_path) and final_path != png_path:
+                            os.remove(final_path)
+                        final_path = png_path
+                    except Exception:
+                        pass
                 print(f"  ✅ seg {seg_id:02d}: 下載成功！→ {final_path}")
                 
                 # 關閉預覽模式 (按 ESC 鍵)
@@ -665,23 +780,25 @@ def start_new_chat(page):
 
 def main():
     parser = argparse.ArgumentParser(description="AI 自動生圖腳本 (支援 ChatGPT / Gemini)")
-    parser.add_argument("--start", type=int, default=0, help="起始 seg_id（預設 0）")
-    parser.add_argument("--end", type=int, default=-1, help="結束 seg_id（預設 -1 = 全部）")
+    parser.add_argument("--book-id", type=str, default=DEFAULT_BOOK_ID, help="書籍 ID")
+    parser.add_argument("--start", type=int, default=0, help="編號起始 seg_id（預設 0）")
+    parser.add_argument("--end", type=int, default=-1, help="編號結束 seg_id（預設 -1 = 全部）")
     parser.add_argument("--cooldown", type=int, default=COOLDOWN_BETWEEN, help="每張圖間隔秒數")
-    parser.add_argument("--engine", type=str, choices=["chatgpt", "gemini"], default="chatgpt", help="生圖引擎 (chatgpt 或 gemini，預設 chatgpt)")
-    parser.add_argument("--csv", type=str, default=CSV_PATH, help="Prompt CSV 路徑（預設使用本書分段生圖腳本）")
-    parser.add_argument("--output-dir", type=str, default=OUTPUT_DIR, help="圖片輸出目錄（預設輸出到本書 bg_image 目錄）")
+    parser.add_argument("--engine", type=str, choices=["chatgpt", "gemini", "meta_ai"], default="chatgpt", help="生圖引擎 (chatgpt, gemini 或 meta_ai，預設 chatgpt)")
+    parser.add_argument("--csv", type=str, default=None, help="Prompt CSV 路徑（預設使用本書分段生圖腳本）")
+    parser.add_argument("--output-dir", type=str, default=None, help="圖片輸出目錄（預設輸出到本書 photo 目錄）")
     
     # 奇偶數過濾參數組
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--odd", action="store_true", help="只處理奇數 (基數) 序列號的 prompt")
-    group.add_argument("--even", action="store_true", help="只處理偶數序列號的 prompt")
+    group.add_argument("--even", action="store_true", help="只處理偶數序列號 of prompt")
     
     args = parser.parse_args()
     
-    # 讀取 Prompt
-    csv_path = args.csv
-    output_dir = args.output_dir
+    # 動態決定路徑
+    book_dir = find_book_dir(args.book_id)
+    csv_path = args.csv if args.csv else os.path.join(book_dir, "raw", "分段生圖腳本.csv")
+    output_dir = args.output_dir if args.output_dir else os.path.join(book_dir, "photo", f"bg{args.book_id}")
 
     if not os.path.exists(csv_path):
         print(f"❌ 找不到 CSV 檔案: {csv_path}")
@@ -712,7 +829,12 @@ def main():
     os.makedirs(output_dir, exist_ok=True)
     
     # 設定目標網址
-    target_url = "https://gemini.google.com" if args.engine == "gemini" else CHATGPT_URL
+    if args.engine == "gemini":
+        target_url = GEMINI_URL
+    elif args.engine == "meta_ai":
+        target_url = META_AI_URL
+    else:
+        target_url = CHATGPT_URL
     
     # 啟動瀏覽器
     print("\n🚀 啟動瀏覽器...")
@@ -721,7 +843,7 @@ def main():
         page = context.pages[0] if context.pages else context.new_page()
         
         # 導航到目標網站
-        print(f"🌐 前往 {args.engine.upper()}...")
+        print(f"🌐 前往 {args.engine.upper()} ({target_url})...")
         page.goto(target_url, wait_until="domcontentloaded", timeout=60000)
         time.sleep(3)
         
@@ -730,8 +852,10 @@ def main():
         try:
             if args.engine == "chatgpt":
                 login_btn = page.query_selector('button:has-text("Log in"), a:has-text("Log in"), button:has-text("登入")')
-            else: # gemini
+            elif args.engine == "gemini":
                 login_btn = page.query_selector('a:has-text("Sign in"), button:has-text("Sign in"), a:has-text("登入"), button:has-text("登入")')
+            else: # meta_ai
+                login_btn = page.query_selector('button:has-text("Log in"), a:has-text("Log in"), button:has-text("登入"), [data-slot="logged-out-signin-card"]')
             if login_btn:
                 login_needed = True
         except Exception:
@@ -744,9 +868,12 @@ def main():
                 print("   1. 點擊 'Log in'")
                 print("   2. 選擇 'Continue with Google'")
                 print("   3. 選擇帳號 ealin.chiu@gmail.com")
-            else: # gemini
+            elif args.engine == "gemini":
                 print("   1. 點擊 'Sign in' 或 '登入'")
                 print("   2. 選擇帳號 ealin.chiu@gmail.com")
+            else: # meta_ai
+                print("   1. 點擊 'Log in' 或 '登入'")
+                print("   2. 選擇使用 Facebook / Instagram / Meta 帳號登入")
             print("   4. 完成登入後，腳本會自動繼續。\n")
             
             if not wait_for_login(page, engine=args.engine):
@@ -798,9 +925,10 @@ def main():
         if fail_list:
             print(f"  🔄 失敗的 seg_id: {fail_list}")
             print(f"     可重新執行: python3 auto_generate_images.py --engine {args.engine} --start {min(fail_list)} --end {max(fail_list)}")
-        print(f"  📁 輸出目錄: {output_dir}")
-        
-        input("\n按 Enter 關閉瀏覽器...")
+        try:
+            input("\n按 Enter 關閉瀏覽器...")
+        except Exception:
+            time.sleep(3)
         context.close()
 
 

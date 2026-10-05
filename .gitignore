@@ -44,6 +44,8 @@ test/
 temp/
 bg_mp3/
 data/
+config/
+site-packages/
 
 # 允許追蹤特定的設定檔與模板
 !00_new_poject_template/
@@ -51,5 +53,12 @@ data/
 !00_new_poject_template/photo/*.png
 !00_new_poject_template/photo/*.jpeg
 !data/*.ttf
-!bg_mp3/*.txt
-
+# 臨時除錯與測試腳本
+debug_*.py
+dump_*.py
+test_*.py
+generate_*_green.py
+generate_concepts*.py
+distribute_images.py
+format_script_v3.py
+generate_ai_future_bg_video.py

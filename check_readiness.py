@@ -52,7 +52,8 @@ def run_checks():
     
     # 1. 檢查 info.txt
     print("\n[項目 1] 檢查 info.txt...")
-    book_id = "146"
+    import sys
+    book_id = sys.argv[1] if len(sys.argv) > 1 else "146"
     book_dir = find_book_dir(book_id)
 
     info_path = f"{book_dir}/raw/info.txt"
@@ -170,25 +171,30 @@ def run_checks():
     # 4.2 訪談影片
     av_dir = f"{book_dir}/AV"
     
-    # 同時相容 '訪談開始.mp4' 與 '訪談START.mp4'
+    # 同時相容 '訪談開始.mp4' 與 '訪談START.mp4' 以及 '黑狗開場謝幕*.mp4'
     start_v = os.path.join(av_dir, "訪談開始.mp4")
     start_v_alt = os.path.join(av_dir, "訪談START.mp4")
     end_v = os.path.join(av_dir, "訪談結束.mp4")
     end_v_alt = os.path.join(av_dir, "訪談END.mp4")
+    custom_avs = [f for f in os.listdir(av_dir) if "黑狗開場謝幕" in f] if os.path.exists(av_dir) else []
     
     if os.path.exists(start_v):
         print(f"  ✓ 找到開場影片: {start_v}")
     elif os.path.exists(start_v_alt):
         print(f"  ✓ 找到開場影片: {start_v_alt}")
+    elif custom_avs:
+        print(f"  ✓ 找到開場/謝幕影片: {custom_avs[0]}")
     else:
-        print(f"  ✗ 找不到開場影片 (預期: 訪談開始.mp4 或 訪談START.mp4)")
+        print(f"  ✗ 找不到開場影片 (預期: 訪談開始.mp4 或 訪談START.mp4 或 黑狗開場謝幕*.mp4)")
         
     if os.path.exists(end_v):
         print(f"  ✓ 找到結束影片: {end_v}")
     elif os.path.exists(end_v_alt):
         print(f"  ✓ 找到結束影片: {end_v_alt}")
+    elif custom_avs:
+        print(f"  ✓ 找到開場/謝幕影片: {custom_avs[0]}")
     else:
-        print(f"  ✗ 找不到結束影片 (預期: 訪談結束.mp4 或 訪談END.mp4)")
+        print(f"  ✗ 找不到結束影片 (預期: 訪談結束.mp4 或 訪談END.mp4 或 黑狗開場謝幕*.mp4)")
         
     # 4.3 中文與原文封面
     cn_cover = False

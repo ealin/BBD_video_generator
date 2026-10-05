@@ -4,12 +4,14 @@ import subprocess
 import argparse
 
 # 設定 BOOK_ID 與動態目錄尋找 (保留此處供手動修改與回溯相容)
-BOOK_ID = "146"
+BOOK_ID = "152"
 
 # TTS 聲音設定 (Edge-TTS)
-VOICE_MALE_HOST = "zh-TW-YunJheNeural"      # 男主持：年輕活潑
-VOICE_FEMALE_HOST = "zh-TW-HsiaoChenNeural"   # 女主持：親切明亮
-VOICE_GUEST = "zh-CN-YunyangNeural"         # 受訪專家 (預設男性)：沉穩知性
+VOICE_MALE_HOST = "zh-CN-YunyangNeural"      # 男主持：沉穩知性
+VOICE_FEMALE_HOST = "zh-CN-XiaoxiaoNeural"   # 女主持：親切自然 (zh-CN-XiaoxiaoNeural)
+VOICE_GUEST = "zh-TW-YunJheNeural"         # 受訪專家 (李開復)(台灣)：青年/沉穩，速度+5%
+RATE_GUEST = "+5%"
+RATE_FEMALE_HOST = "+0%"
 
 # IndexTTS 模型全局變數
 _tts_model = None
@@ -116,29 +118,68 @@ def process_segments(book_id=BOOK_ID, engine="edge-tts"):
     role_name = "AA (Male Host)"
     
     # 處理所有段落
-    speaker_list = []
-    for i, segment in enumerate(segments):
-        segment_id = i + 1
-        
-        # 判斷說話角色 (檢查開頭的 。 數量)
-        if segment.startswith("。。。"):
-            current_voice = VOICE_GUEST
-            current_ref = ref_cc
-            role_name = "CC (Guest)"
-        elif segment.startswith("。。"):
-            current_voice = VOICE_FEMALE_HOST
-            current_ref = ref_bb
-            role_name = "BB (Female Host)"
-        elif segment.startswith("。"):
-            current_voice = VOICE_MALE_HOST
-            current_ref = ref_aa
-            role_name = "AA (Male Host)"
-            
-        if engine == "edge-tts":
-            print(f"[{segment_id:04d}] 角色 (Edge-TTS): {current_voice}")
+    # 1. 預先依序解析所有段落的說話者狀態 (避免並行化後狀態遺失導致角色判定錯誤)
+    resolved_speakers = []
+    current_voice = VOICE_MALE_HOST
+    current_ref = ref_aa
+    role_name = "AA (Male Host)"
+    
+    for segment in segments:
+        if book_id == "150":
+            if segment.startswith("。。。"):
+                current_voice = "zh-CN-XiaoxiaoNeural"
+                current_ref = ref_cc
+                role_name = "CC (Daughter Rachel)"
+            elif segment.startswith("。。"):
+                current_voice = "zh-TW-YunJheNeural"
+                current_ref = ref_bb
+                role_name = "BB (Father Dave)"
+            elif segment.startswith("。") or segment.startswith(">>>>"):
+                current_voice = "zh-TW-HsiaoChenNeural"
+                current_ref = ref_aa
+                role_name = "AA (Female Host)"
+        elif book_id == "151":
+            if segment.startswith("。。"):
+                current_voice = "zh-CN-XiaoxiaoNeural"
+                current_ref = ref_bb
+                role_name = "BB (Author Natasha)"
+            elif segment.startswith("。") or segment.startswith(">>>>"):
+                current_voice = "zh-TW-HsiaoChenNeural"
+                current_ref = ref_aa
+                role_name = "AA (Female Host)"
+        elif book_id == "152":
+            if segment.startswith("。。。"):
+                current_voice = "zh-TW-YunJheNeural"
+                current_ref = ref_cc
+                role_name = "CC (Author Kai-Fu Lee)"
+            elif segment.startswith("。。") or segment.startswith(">>>>"):
+                current_voice = "zh-CN-XiaoxiaoNeural"
+                current_ref = ref_bb
+                role_name = "BB (Female Host)"
         else:
-            print(f"[{segment_id:04d}] 角色 (Index-TTS): {role_name} (Ref: {os.path.basename(current_ref)})")
-        
+            if segment.startswith("。。。"):
+                current_voice = VOICE_GUEST
+                current_ref = ref_cc
+                role_name = "CC (Guest)"
+            elif segment.startswith("。。"):
+                current_voice = VOICE_FEMALE_HOST
+                current_ref = ref_bb
+                role_name = "BB (Female Host)"
+            elif segment.startswith("。"):
+                current_voice = VOICE_MALE_HOST
+                current_ref = ref_aa
+                role_name = "AA (Male Host)"
+            
+        resolved_speakers.append((current_voice, current_ref, role_name))
+
+    # 2. 處理所有段落的並行函數
+    from concurrent.futures import ThreadPoolExecutor
+    
+    def process_single(item):
+        i, segment = item
+        segment_id = i + 1
+        current_voice, current_ref, role_name = resolved_speakers[i]
+            
         txt_filename = f"B{book_id}_{segment_id:04d}.txt"
         txt_path = os.path.join(TXT_DIR, txt_filename)
         mp3_filename = f"B{book_id}_{segment_id:04d}.mp3"
@@ -159,13 +200,13 @@ def process_segments(book_id=BOOK_ID, engine="edge-tts"):
         else:
             role_marker = "未標記"
 
-        speaker_list.append({
+        speaker_info = {
             "檔名": mp3_filename,
             "角色標記": role_marker,
             "角色名稱": role_name if not (segment.startswith(">>>>") or segment.startswith("@@@@")) else "系統符號",
             "TTS語音": current_voice if engine == "edge-tts" else f"Index-TTS ({role_name})",
             "文字內容": segment.replace('\n', ' ')[:50]
-        })
+        }
 
         # 智慧比對：若已有相同文字檔且音檔大小大於 0，則直接跳過生成
         is_identical = False
@@ -180,7 +221,7 @@ def process_segments(book_id=BOOK_ID, engine="edge-tts"):
 
         if is_identical:
             print(f"  -> 段落 {segment_id:04d} 已存在且文字相同，跳過生成。")
-            continue
+            return speaker_info
 
         # 1. 產生文字檔 (保留所有控制符號)
         with open(txt_path, 'w', encoding='utf-8') as f:
@@ -190,8 +231,24 @@ def process_segments(book_id=BOOK_ID, engine="edge-tts"):
         tts_text = clean_text_for_tts(segment)
         
         if engine == "edge-tts":
-            # 如果是純轉場符號(空字串)，傳送一個空格給引擎以產生極短 of 靜音檔
-            final_tts_text = tts_text if tts_text else " "
+            if not tts_text:
+                # 轉場/空秒：寫入一個 0.5 秒的靜音檔 (使用 wav 格式儲存為 .mp3 副檔名，ffmpeg 可自動識別並載入)
+                import wave
+                import struct
+                try:
+                    with wave.open(mp3_path, 'wb') as wav_file:
+                        wav_file.setnchannels(1)
+                        wav_file.setsampwidth(2)
+                        wav_file.setframerate(24000)
+                        num_frames = int(0.5 * 24000)
+                        data = struct.pack('<' + 'h' * num_frames, *([0] * num_frames))
+                        wav_file.writeframes(data)
+                    print(f"  -> 已為轉場段落生成 0.5s 靜音檔: {mp3_filename}")
+                    return speaker_info
+                except Exception as e:
+                    print(f"  -> 生成靜音檔失敗: {e}")
+                    
+            final_tts_text = tts_text
             
             # 使用 python3 -m edge_tts 呼叫引擎
             cmd = [
@@ -201,14 +258,23 @@ def process_segments(book_id=BOOK_ID, engine="edge-tts"):
                 "--write-media", mp3_path
             ]
             
-            # 女主持人加快語速至 +15%
-            if current_voice == VOICE_FEMALE_HOST:
+            # 語速設定
+            if book_id == "152":
+                if current_voice == "zh-TW-YunJheNeural":
+                    cmd.extend(["--rate", "+5%"])
+                # 女聲 zh-CN-XiaoxiaoNeural 保持預設速度 (+0%)
+            elif current_voice == VOICE_FEMALE_HOST:
                 cmd.extend(["--rate", "+15%"])
                 
+            # 建立包含 workspace site-packages 的環境變數
+            env = os.environ.copy()
+            site_packages_dir = os.path.abspath("site-packages")
+            env["PYTHONPATH"] = site_packages_dir + (":" + env["PYTHONPATH"] if "PYTHONPATH" in env else "")
+
             success = False
             for attempt in range(1, 4):
                 try:
-                    subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env)
                     print(f"  -> Edge-TTS 已生成: {txt_filename} & {mp3_filename}")
                     success = True
                     break
@@ -227,12 +293,10 @@ def process_segments(book_id=BOOK_ID, engine="edge-tts"):
                 silence_tensor = torch.zeros(1, 4410)  # 22050Hz * 0.2s = 4410 samples
                 torchaudio.save(mp3_path, silence_tensor, 22050)
                 print(f"  -> Index-TTS 已生成靜音檔: {mp3_filename}")
-                continue
+                return speaker_info
                 
-            # 繁簡轉換 (IndexTTS 的 BPE 字彙表以簡體中文為主，直接輸入繁體會引發 unknown token 發音異常)
+            # 繁簡轉換
             simplified_text = zhconv.convert(tts_text, 'zh-hans')
-            
-            # 過濾特定不支援的字元（例如斜線 '/' 或 & 等常見標點符號，轉換為空白或口語）
             simplified_text = simplified_text.replace('/', ' ').replace('&', ' 和 ')
             
             tts_model = get_index_tts()
@@ -255,6 +319,12 @@ def process_segments(book_id=BOOK_ID, engine="edge-tts"):
                         time.sleep(2)
             if not success:
                 print(f"  -> ❌ Index-TTS 生成 {mp3_filename} 最終失敗！")
+                
+        return speaker_info
+
+    print("開始並行語音生成（線程數 16）...")
+    with ThreadPoolExecutor(max_workers=16) as executor:
+        speaker_list = list(executor.map(process_single, enumerate(segments)))
 
     # 寫入發音人清單 CSV 檔
     csv_file = os.path.join(book_dir, "raw", "發音人清單.csv")
@@ -263,7 +333,8 @@ def process_segments(book_id=BOOK_ID, engine="edge-tts"):
         writer = csv.writer(f_csv)
         writer.writerow(["檔名", "角色標記", "角色名稱", "TTS語音", "文字內容"])
         for item in speaker_list:
-            writer.writerow([item["檔名"], item["角色標記"], item["角色名稱"], item["TTS語音"], item["文字內容"]])
+            if item:
+                writer.writerow([item["檔名"], item["角色標記"], item["角色名稱"], item["TTS語音"], item["文字內容"]])
     print(f"\n✓ 發音人清單已成功輸出至: {csv_file}")
 
     # 完整性驗證：避免中途停止時誤以為 txt/mp3 數量相等就是完成

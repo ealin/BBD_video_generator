@@ -110,13 +110,27 @@ def process_script(input_path, output_path, max_chars=24, max_segment_lines=2):
         if not line:
             i += 1
             continue
-        chapter_match = re.match(r'第\d+章：(.+)', line)
+        if line.startswith("@@@@"):
+            i += 1
+            continue
+        if line.startswith(">>>>"):
+            if is_first_chapter:
+                output.append(f"{line}\n\n")
+                is_first_chapter = False
+            else:
+                output.append(f"\n@@@@\n{line}\n\n")
+            i += 1
+            continue
+
+        chapter_match = re.match(r'^#?\s*(?:>>>>\s*)?(第[一二三四五六七八九十\d]+章)：<?(.+)', line)
         if chapter_match:
-            title = chapter_match.group(1)
-            if not is_first_chapter:
-                output.append("\n@@@@\n")
-            output.append(f">>>>{title}\n")
-            is_first_chapter = False
+            chapter_num = chapter_match.group(1)
+            chapter_title = chapter_match.group(2)
+            if is_first_chapter:
+                output.append(f">>>> {chapter_num}：{chapter_title}\n\n")
+                is_first_chapter = False
+            else:
+                output.append(f"\n@@@@\n>>>> {chapter_num}：{chapter_title}\n\n")
             i += 1
             continue
         if line == "男主持：":
@@ -141,7 +155,7 @@ def process_script(input_path, output_path, max_chars=24, max_segment_lines=2):
                 if not next_line:
                     i += 1
                     continue
-                if next_line in ["男主持：", "女主持：", "受訪者："] or re.match(r'第\d+章：', next_line):
+                if next_line in ["男主持：", "女主持：", "受訪者："] or next_line.startswith(">>>>") or next_line.startswith("@@@@"):
                     break
                 next_direct_match = re.match(r'^(。。。|。。|。)(.+)$', next_line)
                 if next_direct_match:
@@ -159,7 +173,7 @@ def process_script(input_path, output_path, max_chars=24, max_segment_lines=2):
             if not next_line:
                 i += 1
                 continue
-            if next_line in ["男主持：", "女主持：", "受訪者："] or re.match(r'第\d+章：', next_line):
+            if next_line in ["男主持：", "女主持：", "受訪者："] or next_line.startswith(">>>>") or next_line.startswith("@@@@") or re.match(r'^(。。。|。。|。)', next_line):
                 break
             text_block.append(next_line)
             i += 1
@@ -177,7 +191,8 @@ def find_book_dir(book_id):
     raise FileNotFoundError(f"Cannot find book directory starting with {book_id}_")
 
 if __name__ == "__main__":
-    BOOK_ID = "144"
+    import sys
+    BOOK_ID = sys.argv[1] if len(sys.argv) > 1 else "146"
     book_dir = find_book_dir(BOOK_ID)
     base_dir = os.path.join(book_dir, "raw")
     max_chars          = 30   # 每行最多幾個字元

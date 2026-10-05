@@ -1,4 +1,10 @@
 import os
+import sys
+
+_site_packages = os.path.join(os.path.dirname(os.path.abspath(__file__)), "site-packages")
+if os.path.exists(_site_packages) and _site_packages not in sys.path:
+    sys.path.insert(0, _site_packages)
+
 import random
 import numpy as np
 from PIL import Image, ImageDraw, ImageChops, ImageFont
@@ -28,12 +34,18 @@ class TimeTrackingLogger(ProgressBarLogger):
     def bars_callback(self, bar, attr, value, old_value=None):
         super().bars_callback(bar, attr, value, old_value)
         current_time = time.time()
-        # 限制更新頻率為每 0.5 秒一次
-        if current_time - self.last_print_time >= 0.5:
+        # 限制更新頻率為每 0.3 秒一次
+        if current_time - self.last_print_time >= 0.3:
             elapsed = int(current_time - self.start_time)
             total = self.bars[bar].get('total', 0)
-            progress = (value / total * 100) if total > 0 else 0
-            print(f"\r[{self.task_name}] 進度: {progress:.1f}% | 已耗時: {elapsed} 秒", end="", flush=True)
+            if total > 0:
+                progress = (value / total) * 100
+                bar_length = 20
+                filled = int(bar_length * value // total)
+                bar_str = '█' * filled + '░' * (bar_length - filled)
+                print(f"\r⏳ [{self.task_name}] 進度: {progress:5.1f}% |[{bar_str}]| ({value}/{total} 幀) | 已耗時: {elapsed}s", end="", flush=True)
+            else:
+                print(f"\r⏳ [{self.task_name}] 處理中... | 已耗時: {elapsed}s", end="", flush=True)
             self.last_print_time = current_time
 
 # [Claude Comment] : 此程式為 BBD 書籍討論影片自動生成系統。
@@ -483,10 +495,26 @@ def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file
 
     # --- 配置結束 ---
 
-    # [Claude Comment] : 三條影片軌道的 clip 累積清單，最後再各自 concatenate 輸出
-    img_clips = []
-    sub_clips = []
-    head_clips = []
+    import gc
+
+    # 智慧分段編譯臨時檔清單
+    temp_head_files = []
+    temp_sub_files = []
+    temp_img_files = []
+    
+    # 局部批次編譯 (Chunk) 清單
+    chunk_img_clips = []
+    chunk_sub_clips = []
+    chunk_head_clips = []
+    chunk_overlay_clips = []
+    chunk_text_layer_clips = []
+    chunk_clips_to_close = []
+    
+    chunk_start_second = start_second
+    valid_clip_count = 0
+    CHUNK_SIZE = 30
+    chunk_idx = 0
+    book_output_dir = os.path.dirname(output_file)
 
     # [Claude Comment] : acc_second 追蹤整支影片的累計時間軸，用於計算章節標題的絕對時間戳
     acc_second = start_second
@@ -530,14 +558,98 @@ def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file
                 print(f"⚠️ 讀取插圖 CSV 時發生錯誤: {e_csv}")
 
     # --- 新增：插圖疊加與字幕層配置 ---
-    overlay_clips = []
-    text_layer_clips = []
     block_count = 0
     BLOCKS_PER_SEGMENT = 10
     IMAGE_DISPLAY_DURATION = 25  # 改為 30 秒
     ZOOM_STOPS_AT = 18           # 18秒內漸漸顯示完整大圖
     TARGET_IMAGE_SIZE = 960       # 從 1024 稍微縮小為 960，右側預留約 20 點空間
     RIGHT_PADDING = 20            # 右側留出 20 點空間
+    
+    def write_chunk_files():
+        nonlocal chunk_start_second, chunk_idx, valid_clip_count
+        chunk_duration = acc_second - chunk_start_second
+        if chunk_duration <= 0:
+            return
+
+        print(f"\n--- [記憶體優化] 開始編譯與渲染第 {chunk_idx} 分段片段，長度: {chunk_duration:.2f} 秒 ---")
+        
+        # 1. 渲染 Head chunk
+        if mode in ["all", "head"] and chunk_head_clips:
+            chunk_output_head = os.path.join(book_output_dir, f"temp_head_chunk_{chunk_idx}.mp4")
+            final_chunk_head = concatenate_videoclips(chunk_head_clips, method="chain")
+            logger_chunk_head = TimeTrackingLogger(f"Chunk_{chunk_idx}_head")
+            final_chunk_head.write_videofile(chunk_output_head, fps=24, codec='libx264', audio=False, threads=8, logger=logger_chunk_head)
+            print()
+            temp_head_files.append(chunk_output_head)
+            final_chunk_head.close()
+
+        # 2. 渲染 Sub chunk
+        if mode in ["all", "sub"] and chunk_sub_clips:
+            chunk_output_sub = os.path.join(book_output_dir, f"temp_sub_chunk_{chunk_idx}.mp4")
+            final_sub_bg = concatenate_videoclips(chunk_sub_clips, method="chain")
+            final_chunk_sub = CompositeVideoClip([final_sub_bg] + chunk_overlay_clips + chunk_text_layer_clips).with_duration(chunk_duration)
+            logger_chunk_sub = TimeTrackingLogger(f"Chunk_{chunk_idx}_sub")
+            final_chunk_sub.write_videofile(chunk_output_sub, fps=24, codec='libx264', audio_codec='aac', threads=8, logger=logger_chunk_sub)
+            print()
+            temp_sub_files.append(chunk_output_sub)
+            final_chunk_sub.close()
+
+        # 3. 渲染 Img chunk
+        if mode in ["all", "img"]:
+            chunk_output_img = os.path.join(book_output_dir, f"temp_img_chunk_{chunk_idx}.mp4")
+            logger_chunk_img = TimeTrackingLogger(f"Chunk_{chunk_idx}_img")
+            if bg_type == 0:
+                if chunk_img_clips:
+                    final_chunk_img = concatenate_videoclips(chunk_img_clips, method="chain")
+                    final_chunk_img.write_videofile(chunk_output_img, fps=24, codec='libx264', audio=False, threads=8, logger=logger_chunk_img)
+                    print()
+                    final_chunk_img.close()
+            else:
+                global default_bg_video
+                bg_video = VideoFileClip(default_bg_video).resized((1920, 1080), Image.LANCZOS)
+                loops = int(chunk_duration / bg_video.duration) + 1
+                final_chunk_img = concatenate_videoclips([bg_video] * loops).with_duration(chunk_duration)
+                final_chunk_img = final_chunk_img.without_audio()
+                final_chunk_img.write_videofile(chunk_output_img, fps=24, codec='libx264', audio=False, threads=8, logger=logger_chunk_img)
+                print()
+                final_chunk_img.close()
+                bg_video.close()
+            temp_img_files.append(chunk_output_img)
+
+        # 4. 關閉所有子影片解碼器，強制回收記憶體
+        for c in chunk_clips_to_close:
+            try: c.close()
+            except Exception: pass
+        for c in chunk_sub_clips:
+            try: c.close()
+            except Exception: pass
+        for c in chunk_head_clips:
+            try: c.close()
+            except Exception: pass
+        for c in chunk_img_clips:
+            try: c.close()
+            except Exception: pass
+        for c in chunk_overlay_clips:
+            try: c.close()
+            except Exception: pass
+        for c in chunk_text_layer_clips:
+            try: c.close()
+            except Exception: pass
+        
+        # 重設清單與變數
+        chunk_img_clips.clear()
+        chunk_sub_clips.clear()
+        chunk_head_clips.clear()
+        chunk_overlay_clips.clear()
+        chunk_text_layer_clips.clear()
+        chunk_clips_to_close.clear()
+        
+        gc.collect()
+        print(f"--- [記憶體優化] 第 {chunk_idx} 分段片段處理完成，已回收內存 ---")
+        
+        chunk_start_second = acc_second
+        chunk_idx += 1
+        valid_clip_count = 0
     # -----------------------------
 
     all_txt_files = [f for f in os.listdir(txt_dir) if not f.startswith('.')]
@@ -636,6 +748,7 @@ def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file
                     audio_clip = AudioClip(make_silence, duration=duration, fps=44100)
                 else:
                     audio_clip = AudioFileClip(mp3_path)
+                    chunk_clips_to_close.append(audio_clip)
                     duration = audio_clip.duration
 
             subtitle_text = subtitle_text.replace(pattern_new_line, '\n')
@@ -692,8 +805,8 @@ def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file
                     pos_x = 1920 - RIGHT_PADDING - TARGET_IMAGE_SIZE  # 1920 - 20 - 960 = 940
                     pos_y = 540 - TARGET_IMAGE_SIZE // 2            # 60
                     ov_clip = ov_clip.with_position((pos_x, pos_y))
-                    ov_clip = ov_clip.with_start(acc_second)
-                    overlay_clips.append(ov_clip)
+                    ov_clip = ov_clip.with_start(acc_second - chunk_start_second) # 相對時間
+                    chunk_overlay_clips.append(ov_clip)
             # -----------------------------------------------
 
             # --- Sub影片 (字幕) 製作 ---
@@ -701,9 +814,9 @@ def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file
             
             # 1. 綠幕背景與音軌 (用於串接)
             green_bg = ColorClip(size=(1920, 1080), color=background_color, duration=duration).with_audio(audio_clip)
-            sub_clips.append(green_bg)
+            chunk_sub_clips.append(green_bg)
 
-            # 2. 獨立字幕層 (text_layer_clips)
+            # 2. 獨立字幕層 (chunk_text_layer_clips)
             if starts_with_pattern(subtitle_text, pattern_topic):
                 topic_text = subtitle_text.replace(pattern_topic, "")
                 print("***** Topic 發現: " + subtitle_text + " 開始時間 = " + format_seconds_to_hms(acc_second))
@@ -725,8 +838,8 @@ def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file
                         duration         = duration,
                         sub_font_type    = sub_font_type
                     ).with_position((string_left, string_top)) \
-                     .with_start(acc_second)
-                    text_layer_clips.append(t_clip)
+                     .with_start(acc_second - chunk_start_second) # 相對時間
+                    chunk_text_layer_clips.append(t_clip)
 
             # 3. 獨立標題層
             if topic_text and not starts_with_pattern(subtitle_text, '@@@@'):
@@ -739,10 +852,10 @@ def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file
                     stroke_color = topic_font_strok_color,
                     stroke_width = topic_font_strok_width,
                     duration     = duration,
-                ).with_start(acc_second)
+                ).with_start(acc_second - chunk_start_second) # 相對時間
                 if is_eng:
                     top_clip = top_clip.with_position((0, 0))
-                text_layer_clips.append(top_clip)
+                chunk_text_layer_clips.append(top_clip)
 
 
             # --- Img影片 (背景) 製作 ---
@@ -755,7 +868,7 @@ def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file
                     bg_clip = ImageClip('temp.jpg').with_duration(duration)
                     img_video_clip = CompositeVideoClip([bg_clip], size=(1920, 1080)).with_duration(duration)
 
-                img_clips.append(img_video_clip)
+                chunk_img_clips.append(img_video_clip)
 
 
             # --- 頭像影片 (Head) 製作 (PIL 合成 + 縮放 或 動態綠幕) ---
@@ -771,6 +884,7 @@ def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file
                     
                     if stickman_mp4_path and os.path.exists(stickman_mp4_path):
                         clip = VideoFileClip(stickman_mp4_path)
+                        chunk_clips_to_close.append(clip)
                         if clip.h != 1080:
                             clip = clip.resized(height=1080)
                         
@@ -783,7 +897,7 @@ def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file
                         green_canvas = ColorClip(size=(1920, 1080), color=background_color, duration=duration)
                         pos_x = (1920 - clip_processed.w) // 2
                         positioned_clip = clip_processed.with_position((pos_x, 0))
-                        head_video_clip = CompositeVideoClip([green_canvas, positioned_clip], size=(1920, 1080))
+                        head_video_clip = CompositeVideoClip([green_canvas, positioned_clip], size=(1920, 1080)).with_duration(duration)
                     else:
                         print(f"⚠️ 找不到動態綠幕影片 {stickman_mp4_path if stickman_mp4_path else ''}，使用綠幕背景替代")
                         head_video_clip = ColorClip(size=(1920, 1080), color=background_color, duration=duration)
@@ -833,10 +947,17 @@ def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file
                 final_head_frame = np.array(base_img)
                 head_video_clip = ImageClip(final_head_frame).with_duration(duration)
 
-            head_clips.append(head_video_clip)
+            chunk_head_clips.append(head_video_clip)
             # ---------------------------------
 
             acc_second = acc_second + duration
+            valid_clip_count += 1
+            if valid_clip_count >= CHUNK_SIZE:
+                write_chunk_files()
+
+    # 處理最後一塊剩餘的片段
+    if valid_clip_count > 0:
+        write_chunk_files()
 
     print("打印 Topic 數組中的所有元素:")
     topic_num = 0
@@ -852,39 +973,55 @@ def generate_videos_from_txt_img_mp3(txt_dir, voice_dir, bg_img_dir, output_file
     output_file_head = f"{base_filename}_head{ext}"
 
     # [Claude Comment] : 頭像影片不含音訊 (audio=False)，後製合成時才與字幕軌道混音
-    if mode in ["all", "head"]:
-        final_head_clip = concatenate_videoclips(head_clips, method="chain")
+    if mode in ["all", "head"] and temp_head_files:
+        print("\n--- [最終合併] 開始拼接所有臨時頭像分段影片 ---")
+        head_video_clips = [VideoFileClip(f) for f in temp_head_files]
+        final_head_clip = concatenate_videoclips(head_video_clips, method="chain")
         logger_head = TimeTrackingLogger(os.path.basename(output_file_head))
         final_head_clip.write_videofile(output_file_head, fps=24, codec='libx264', audio=False, threads=8, logger=logger_head)
         elapsed = int(time.time() - logger_head.start_time)
         print(f"\n已生成頭像影片: {output_file_head}，總共耗時: {elapsed} 秒")
+        # 釋放資源與刪除臨時檔案
+        final_head_clip.close()
+        for c in head_video_clips:
+            try: c.close()
+            except Exception: pass
+        for f in temp_head_files:
+            try: os.remove(f)
+            except Exception: pass
 
     # [Claude Comment] : 2026 更新：使用 CompositeVideoClip 組合綠幕、插圖與字幕層
-    if mode in ["all", "sub"]:
-        final_sub_bg = concatenate_videoclips(sub_clips, method="chain")
-        final_sub_clip = CompositeVideoClip([final_sub_bg] + overlay_clips + text_layer_clips)
+    if mode in ["all", "sub"] and temp_sub_files:
+        print("\n--- [最終合併] 開始拼接所有臨時字幕分段影片 ---")
+        sub_video_clips = [VideoFileClip(f) for f in temp_sub_files]
+        final_sub_clip = concatenate_videoclips(sub_video_clips, method="chain")
         logger_sub = TimeTrackingLogger(os.path.basename(output_file_sub))
         final_sub_clip.write_videofile(output_file_sub, fps=24, codec='libx264', audio_codec='aac', threads=8, logger=logger_sub)
         elapsed = int(time.time() - logger_sub.start_time)
         print(f"\n已生成字幕影片: {output_file_sub}，總共耗時: {elapsed} 秒")
+        final_sub_clip.close()
+        for c in sub_video_clips:
+            try: c.close()
+            except Exception: pass
+        for f in temp_sub_files:
+            try: os.remove(f)
+            except Exception: pass
 
-    if mode in ["all", "img"]:
-        if bg_type == 0:
-            final_img_clip = concatenate_videoclips(img_clips, method="chain")
-        else:
-            # [Claude Comment] : bg_type=1 時，將 default_bg_video 重複循環至與內容等長，作為背景影片
-            global default_bg_video
-            total_duration = acc_second - start_second
-            bg_video = VideoFileClip(default_bg_video).resized((1920, 1080), Image.LANCZOS)
-            loops = int(total_duration / bg_video.duration) + 1
-            final_img_clip = concatenate_videoclips([bg_video] * loops).with_duration(total_duration)
-            final_img_clip = final_img_clip.without_audio()
-
+    if mode in ["all", "img"] and temp_img_files:
+        print("\n--- [最終合併] 開始拼接所有臨時背景分段影片 ---")
+        img_video_clips = [VideoFileClip(f) for f in temp_img_files]
+        final_img_clip = concatenate_videoclips(img_video_clips, method="chain")
         logger_img = TimeTrackingLogger(os.path.basename(output_file_img))
         final_img_clip.write_videofile(output_file_img, fps=24, codec='libx264', audio=False, threads=8, logger=logger_img)
         elapsed = int(time.time() - logger_img.start_time)
         print(f"\n已生成背景影片: {output_file_img}，總共耗時: {elapsed} 秒")
-
+        final_img_clip.close()
+        for c in img_video_clips:
+            try: c.close()
+            except Exception: pass
+        for f in temp_img_files:
+            try: os.remove(f)
+            except Exception: pass
 
     # [Claude Comment] : 回傳章節數、目前累計秒數(+1 防止下一段 start_second 重疊)、背景圖 ID 游標
     return topic_num, int(acc_second) + 1, bg_img_ID
@@ -1195,7 +1332,7 @@ def create_countdown_video(minutes, seconds, font, fontsize, color, position, ou
 # --------------------------------------------------------------------------------------------------
 
 # Configuration
-book_ID = '146'
+book_ID = '152'
 clip_number = 1         # 總共分為幾段 (B77-1, B77-2, B77-3)
 string_align = 'left'   # 'center': 靠中偏右; 'left': 對齊左邊邊框
 
@@ -1219,13 +1356,13 @@ head_type = 'dynamic_body'
 # 'default'            : 說話人自訂色彩 + 黑邊
 # 'white_black_border' : 白色字體 + 黑邊
 # 'white_trans_black_bg': 白色字體 + 半透明黑色背景卡
-sub_font_type = 'default'
+sub_font_type = 'white_trans_black_bg'
 
-# [Claude Comment] : 每段影片可指定不同的循環背景影片，目前四段皆使用同一個黑膠唱盤動畫
-default_bg_video = 'data/背景影片/台幣.mp4'
-default_bg_video2 = 'data/黑膠2.mp4'
-default_bg_video3 = 'data/黑膠2.mp4'
-default_bg_video4 = 'data/黑膠2.mp4'
+# [Claude Comment] : 每段影片可指定不同的循環背景影片
+default_bg_video = 'data/背景影片/AI未來已來.mp4'
+default_bg_video2 = 'data/背景影片/AI未來已來.mp4'
+default_bg_video3 = 'data/背景影片/AI未來已來.mp4'
+default_bg_video4 = 'data/背景影片/AI未來已來.mp4'
 
 import sys
 is_eng = "--eng" in sys.argv
